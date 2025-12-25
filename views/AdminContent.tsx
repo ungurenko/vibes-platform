@@ -111,7 +111,23 @@ const AdminContent: React.FC<AdminContentProps> = ({
 
   // Data State
   const [glossary, setGlossary] = useState<GlossaryTerm[]>(GLOSSARY_DATA);
-  
+
+  // Category Management State
+  const [customCategory, setCustomCategory] = useState<string>('');
+  const [isAddingCategory, setIsAddingCategory] = useState<boolean>(false);
+
+  // Get unique categories from existing data
+  const getUniqueCategories = (type: 'prompts' | 'roadmaps' | 'styles') => {
+    if (type === 'prompts') {
+      return Array.from(new Set(prompts.map(p => p.category)));
+    } else if (type === 'roadmaps') {
+      return Array.from(new Set(roadmaps.map(r => r.category)));
+    } else if (type === 'styles') {
+      return Array.from(new Set(styles.map(s => s.category)));
+    }
+    return [];
+  };
+
   // --- Helpers ---
 
   const saveToCloud = async () => {
@@ -883,13 +899,164 @@ const AdminContent: React.FC<AdminContentProps> = ({
                         className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 font-mono text-sm" 
                     />
                 </div>
-                <Select 
-                    label="Категория"
-                    value={editingItem?.category || 'Минимализм'}
-                    onChange={(e) => updateField('category', e.target.value)}
-                    options={['Светлые', 'Тёмные', 'Яркие', 'Минимализм'].map(c => ({ value: c, label: c }))}
-                />
+
+                {/* Category Management for Styles */}
+                <div>
+                   <label className="block text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-2">Категория</label>
+                   <div className="space-y-2">
+                      <select
+                         value={editingItem?.category || ''}
+                         onChange={(e) => {
+                            if (e.target.value === '__add_new__') {
+                               setIsAddingCategory(true);
+                            } else {
+                               updateField('category', e.target.value);
+                            }
+                         }}
+                         className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 focus:outline-none focus:border-violet-500"
+                      >
+                         <option value="">Выберите категорию...</option>
+                         {getUniqueCategories('styles').map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                         ))}
+                         <option value="__add_new__">+ Добавить новую категорию</option>
+                      </select>
+
+                      {isAddingCategory && (
+                         <div className="flex gap-2">
+                            <input
+                               type="text"
+                               placeholder="Новая категория..."
+                               value={customCategory}
+                               onChange={(e) => setCustomCategory(e.target.value)}
+                               className="flex-1 px-4 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 focus:outline-none focus:border-violet-500"
+                               autoFocus
+                            />
+                            <button
+                               type="button"
+                               onClick={() => {
+                                  if (customCategory.trim()) {
+                                     updateField('category', customCategory.trim());
+                                     setCustomCategory('');
+                                     setIsAddingCategory(false);
+                                  }
+                               }}
+                               className="px-4 py-2 bg-violet-600 text-white rounded-xl hover:bg-violet-500 font-bold text-sm"
+                            >
+                               Добавить
+                            </button>
+                            <button
+                               type="button"
+                               onClick={() => {
+                                  setIsAddingCategory(false);
+                                  setCustomCategory('');
+                               }}
+                               className="px-4 py-2 bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-xl hover:bg-zinc-300 dark:hover:bg-zinc-600 font-bold text-sm"
+                            >
+                               Отмена
+                            </button>
+                         </div>
+                      )}
+                   </div>
+                </div>
              </>
+         )}
+
+         {activeTab === 'prompts' && (
+            <>
+               <div>
+                  <label className="block text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-2">Текст промпта</label>
+                  <textarea
+                       rows={8}
+                       value={editingItem?.content || ''}
+                       onChange={(e) => updateField('content', e.target.value)}
+                       placeholder="Введите текст промпта..."
+                       className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 focus:outline-none focus:border-violet-500 font-mono text-sm"
+                   />
+               </div>
+
+               <div>
+                  <label className="block text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-2">Инструкция по использованию</label>
+                  <textarea
+                       rows={3}
+                       value={editingItem?.usage || ''}
+                       onChange={(e) => updateField('usage', e.target.value)}
+                       placeholder="Как использовать этот промпт..."
+                       className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 focus:outline-none focus:border-violet-500 text-sm"
+                   />
+               </div>
+
+               {/* Category Management for Prompts */}
+               <div>
+                  <label className="block text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-2">Категория</label>
+                  <div className="space-y-2">
+                     <select
+                        value={editingItem?.category || ''}
+                        onChange={(e) => {
+                           if (e.target.value === '__add_new__') {
+                              setIsAddingCategory(true);
+                           } else {
+                              updateField('category', e.target.value);
+                           }
+                        }}
+                        className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 focus:outline-none focus:border-violet-500"
+                     >
+                        <option value="">Выберите категорию...</option>
+                        {getUniqueCategories('prompts').map(cat => (
+                           <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                        <option value="__add_new__">+ Добавить новую категорию</option>
+                     </select>
+
+                     {isAddingCategory && (
+                        <div className="flex gap-2">
+                           <input
+                              type="text"
+                              placeholder="Новая категория..."
+                              value={customCategory}
+                              onChange={(e) => setCustomCategory(e.target.value)}
+                              className="flex-1 px-4 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 focus:outline-none focus:border-violet-500"
+                              autoFocus
+                           />
+                           <button
+                              type="button"
+                              onClick={() => {
+                                 if (customCategory.trim()) {
+                                    updateField('category', customCategory.trim());
+                                    setCustomCategory('');
+                                    setIsAddingCategory(false);
+                                 }
+                              }}
+                              className="px-4 py-2 bg-violet-600 text-white rounded-xl hover:bg-violet-500 font-bold text-sm"
+                           >
+                              Добавить
+                           </button>
+                           <button
+                              type="button"
+                              onClick={() => {
+                                 setIsAddingCategory(false);
+                                 setCustomCategory('');
+                              }}
+                              className="px-4 py-2 bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-xl hover:bg-zinc-300 dark:hover:bg-zinc-600 font-bold text-sm"
+                           >
+                              Отмена
+                           </button>
+                        </div>
+                     )}
+                  </div>
+               </div>
+
+               <div>
+                  <label className="block text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-2">Теги (через запятую)</label>
+                  <input
+                     type="text"
+                     value={(editingItem?.tags || []).join(', ')}
+                     onChange={(e) => updateField('tags', e.target.value.split(',').map((t: string) => t.trim()).filter((t: string) => t))}
+                     placeholder="react, typescript, ui..."
+                     className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 focus:outline-none focus:border-violet-500"
+                  />
+               </div>
+            </>
          )}
 
          {activeTab === 'glossary' && (
@@ -921,12 +1088,65 @@ const AdminContent: React.FC<AdminContentProps> = ({
          {activeTab === 'roadmaps' && (
             <>
                 <div className="grid grid-cols-2 gap-4">
-                    <Select 
-                        label="Категория"
-                        value={editingItem?.category || 'Подготовка'}
-                        onChange={(e) => updateField('category', e.target.value)}
-                        options={['Подготовка', 'Лендинг', 'Веб-сервис', 'Полезное'].map(c => ({ value: c, label: c }))}
-                    />
+                    {/* Category Management for Roadmaps */}
+                    <div>
+                       <label className="block text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-2">Категория</label>
+                       <div className="space-y-2">
+                          <select
+                             value={editingItem?.category || ''}
+                             onChange={(e) => {
+                                if (e.target.value === '__add_new__') {
+                                   setIsAddingCategory(true);
+                                } else {
+                                   updateField('category', e.target.value);
+                                }
+                             }}
+                             className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 focus:outline-none focus:border-violet-500"
+                          >
+                             <option value="">Выберите категорию...</option>
+                             {getUniqueCategories('roadmaps').map(cat => (
+                                <option key={cat} value={cat}>{cat}</option>
+                             ))}
+                             <option value="__add_new__">+ Добавить новую</option>
+                          </select>
+
+                          {isAddingCategory && (
+                             <div className="flex gap-2">
+                                <input
+                                   type="text"
+                                   placeholder="Новая категория..."
+                                   value={customCategory}
+                                   onChange={(e) => setCustomCategory(e.target.value)}
+                                   className="flex-1 px-3 py-2 text-sm rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 focus:outline-none focus:border-violet-500"
+                                   autoFocus
+                                />
+                                <button
+                                   type="button"
+                                   onClick={() => {
+                                      if (customCategory.trim()) {
+                                         updateField('category', customCategory.trim());
+                                         setCustomCategory('');
+                                         setIsAddingCategory(false);
+                                      }
+                                   }}
+                                   className="px-3 py-2 bg-violet-600 text-white rounded-xl hover:bg-violet-500 font-bold text-xs"
+                                >
+                                   OK
+                                </button>
+                                <button
+                                   type="button"
+                                   onClick={() => {
+                                      setIsAddingCategory(false);
+                                      setCustomCategory('');
+                                   }}
+                                   className="px-3 py-2 bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-xl hover:bg-zinc-300 dark:hover:bg-zinc-600 font-bold text-xs"
+                                >
+                                   ✕
+                                </button>
+                             </div>
+                          )}
+                       </div>
+                    </div>
                     <Input 
                         label="Иконка (Эмодзи)"
                         value={editingItem?.icon || ''}
