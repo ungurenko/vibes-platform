@@ -6,7 +6,7 @@ import { InviteLink } from '../types';
 
 interface RegisterProps {
   inviteCode: string;
-  onRegister: (data: { name: string; email: string; avatar?: string }) => void;
+  onRegister: (data: { name: string; email: string; avatar?: string; password?: string }) => void;
   onNavigateLogin: () => void;
   validateInvite: (code: string) => Promise<InviteLink | null>;
 }
@@ -53,7 +53,7 @@ const Register: React.FC<RegisterProps> = ({ inviteCode, onRegister, onNavigateL
     setIsLoading(true);
     setTimeout(() => {
         setIsLoading(false);
-        onRegister({ name, email, avatar: avatar || undefined });
+        onRegister({ name, email, avatar: avatar || undefined, password });
     }, 1500);
   };
 
