@@ -22,7 +22,11 @@ type ProgressMap = Record<string, string[]>; // roadmapId -> array of completed 
 
 const CATEGORIES: RoadmapCategory[] = ['Подготовка', 'Лендинг', 'Веб-сервис', 'Полезное'];
 
-const Roadmaps: React.FC = () => {
+interface RoadmapsProps {
+  roadmaps?: Roadmap[];
+}
+
+const Roadmaps: React.FC<RoadmapsProps> = ({ roadmaps = ROADMAPS_DATA }) => {
   const { playSound } = useSound();
   const [activeMapId, setActiveMapId] = useState<string | null>(null);
   const [completedSteps, setCompletedSteps] = useState<ProgressMap>({});
@@ -52,9 +56,9 @@ const Roadmaps: React.FC = () => {
     }
   }, [activeMapId]);
 
-  const activeMap = useMemo(() => 
-    ROADMAPS_DATA.find(r => r.id === activeMapId), 
-  [activeMapId]);
+  const activeMap = useMemo(() =>
+    roadmaps.find(r => r.id === activeMapId),
+  [activeMapId, roadmaps]);
 
   const toggleStep = (stepId: string) => {
     if (!activeMapId) return;
@@ -99,9 +103,9 @@ const Roadmaps: React.FC = () => {
   };
 
   const filteredRoadmaps = useMemo(() => {
-    if (activeCategory === 'Все') return ROADMAPS_DATA;
-    return ROADMAPS_DATA.filter(r => r.category === activeCategory);
-  }, [activeCategory]);
+    if (activeCategory === 'Все') return roadmaps;
+    return roadmaps.filter(r => r.category === activeCategory);
+  }, [activeCategory, roadmaps]);
 
   const calculateProgress = (roadmapId: string, totalSteps: number) => {
     const completed = completedSteps[roadmapId]?.length || 0;

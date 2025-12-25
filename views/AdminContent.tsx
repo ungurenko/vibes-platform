@@ -56,23 +56,23 @@ interface AdminRoadmap extends Roadmap {
   completions?: number;
 }
 
-// --- Mock Data Enrichment ---
-const INITIAL_STYLES = STYLES_DATA.map(s => ({
+// Helper to enrich data with admin fields (stable, no random)
+const enrichStyles = (data: typeof STYLES_DATA): AdminStyle[] => data.map(s => ({
   ...s,
-  usageCount: Math.floor(Math.random() * 1200) + 100,
-  status: 'published'
+  usageCount: (s as any).usageCount ?? 0,
+  status: (s as any).status ?? 'published'
 } as AdminStyle));
 
-const INITIAL_PROMPTS = PROMPTS_DATA.map(p => ({
+const enrichPrompts = (data: typeof PROMPTS_DATA): AdminPrompt[] => data.map(p => ({
   ...p,
-  copyCount: Math.floor(Math.random() * 800) + 50,
-  status: 'published'
+  copyCount: (p as any).copyCount ?? 0,
+  status: (p as any).status ?? 'published'
 } as AdminPrompt));
 
-const INITIAL_ROADMAPS = ROADMAPS_DATA.map(r => ({
+const enrichRoadmaps = (data: typeof ROADMAPS_DATA): AdminRoadmap[] => data.map(r => ({
   ...r,
-  activeUsers: Math.floor(Math.random() * 200) + 10,
-  completions: Math.floor(Math.random() * 50) + 5
+  activeUsers: (r as any).activeUsers ?? 0,
+  completions: (r as any).completions ?? 0
 } as AdminRoadmap));
 
 interface AdminContentProps {
@@ -86,16 +86,20 @@ interface AdminContentProps {
     onUpdateStyles?: (styles: StyleCard[]) => void;
 }
 
-const AdminContent: React.FC<AdminContentProps> = ({ 
-    modules = COURSE_MODULES, 
+const AdminContent: React.FC<AdminContentProps> = ({
+    modules = COURSE_MODULES,
     onUpdateModules,
-    prompts = INITIAL_PROMPTS,
+    prompts = PROMPTS_DATA,
     onUpdatePrompts,
-    roadmaps = INITIAL_ROADMAPS,
+    roadmaps = ROADMAPS_DATA,
     onUpdateRoadmaps,
-    styles = INITIAL_STYLES,
+    styles = STYLES_DATA,
     onUpdateStyles
 }) => {
+  // Enrich with admin fields for display
+  const adminStyles = enrichStyles(styles);
+  const adminPrompts = enrichPrompts(prompts);
+  const adminRoadmaps = enrichRoadmaps(roadmaps);
   const [activeTab, setActiveTab] = useState<ContentTab>('lessons');
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any | null>(null);
@@ -355,7 +359,7 @@ const AdminContent: React.FC<AdminContentProps> = ({
   const renderStylesView = () => {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-         {styles.map((style) => (
+         {adminStyles.map((style) => (
            <div key={style.id} className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-white/5 overflow-hidden group hover:border-violet-300 dark:hover:border-violet-500/30 transition-all shadow-sm">
               <div className="h-40 bg-zinc-100 dark:bg-zinc-800 relative overflow-hidden">
                  {style.image ? (
@@ -415,7 +419,7 @@ const AdminContent: React.FC<AdminContentProps> = ({
                  </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                 {prompts.map((prompt) => (
+                 {adminPrompts.map((prompt) => (
                     <tr key={prompt.id} className="hover:bg-zinc-50 dark:hover:bg-white/[0.02] group">
                        <td className="px-6 py-4">
                           <span className="inline-block px-2 py-1 rounded text-xs font-medium bg-zinc-100 dark:bg-white/10 text-zinc-600 dark:text-zinc-300">
@@ -506,7 +510,7 @@ const AdminContent: React.FC<AdminContentProps> = ({
   const renderRoadmapsView = () => {
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {roadmaps.map((map) => (
+            {adminRoadmaps.map((map) => (
                 <div key={map.id} className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-white/5 p-6 hover:border-violet-300 dark:hover:border-violet-500/30 transition-all shadow-sm group">
                     <div className="flex justify-between items-start mb-4">
                         <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-2xl">
@@ -897,17 +901,27 @@ const AdminContent: React.FC<AdminContentProps> = ({
   return (
     <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-8 md:py-12 pb-32">
        {/* Top Bar */}
-       <PageHeader 
-         title="Управление контентом" 
+       <PageHeader
+         title="Управление контентом"
          description="Редактирование базы знаний платформы."
          action={
-            <button 
-             onClick={() => openEditor()} 
-             className="px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-xl font-bold hover:scale-105 active:scale-95 transition-all flex items-center gap-2 shadow-lg shadow-zinc-500/10"
-            >
-             <Plus size={18} />
-             <span>Добавить {activeTab === 'lessons' ? 'урок' : activeTab === 'styles' ? 'стиль' : activeTab === 'prompts' ? 'промпт' : activeTab === 'roadmaps' ? 'карту' : 'термин'}</span>
-            </button>
+            <div className="flex items-center gap-3">
+               <button
+                onClick={saveToCloud}
+                disabled={isSaving}
+                className="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold hover:scale-105 active:scale-95 transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+               >
+                <CloudUpload size={18} />
+                <span>{isSaving ? 'Сохраняем...' : 'Сохранить в облако'}</span>
+               </button>
+               <button
+                onClick={() => openEditor()}
+                className="px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-xl font-bold hover:scale-105 active:scale-95 transition-all flex items-center gap-2 shadow-lg shadow-zinc-500/10"
+               >
+                <Plus size={18} />
+                <span>Добавить {activeTab === 'lessons' ? 'урок' : activeTab === 'styles' ? 'стиль' : activeTab === 'prompts' ? 'промпт' : activeTab === 'roadmaps' ? 'карту' : 'термин'}</span>
+               </button>
+            </div>
          }
        />
 

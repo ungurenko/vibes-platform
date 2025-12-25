@@ -30,7 +30,11 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 // --- Components ---
 
-const PromptBase: React.FC = () => {
+interface PromptBaseProps {
+  prompts?: PromptItem[];
+}
+
+const PromptBase: React.FC<PromptBaseProps> = ({ prompts = PROMPTS_DATA }) => {
   const { playSound } = useSound();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -47,14 +51,14 @@ const PromptBase: React.FC = () => {
   };
 
   const filteredPrompts = useMemo(() => {
-    return PROMPTS_DATA.filter(prompt => {
-      const matchesSearch = prompt.title.toLowerCase().includes(search.toLowerCase()) || 
+    return prompts.filter(prompt => {
+      const matchesSearch = prompt.title.toLowerCase().includes(search.toLowerCase()) ||
                             prompt.description.toLowerCase().includes(search.toLowerCase()) ||
                             prompt.tags.some(tag => tag.toLowerCase().includes(search.toLowerCase()));
       const matchesCategory = activeCategory === 'Все' || prompt.category === activeCategory;
       return matchesSearch && matchesCategory;
     });
-  }, [search, activeCategory]);
+  }, [search, activeCategory, prompts]);
 
   return (
     <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-8 md:py-12 pb-32">

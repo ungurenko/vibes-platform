@@ -8,7 +8,11 @@ import { useSound } from '../SoundContext';
 
 const CATEGORIES: StyleCategory[] = ['Все', 'Светлые', 'Тёмные', 'Яркие', 'Минимализм'];
 
-const StyleLibrary: React.FC = () => {
+interface StyleLibraryProps {
+  styles?: StyleCard[];
+}
+
+const StyleLibrary: React.FC<StyleLibraryProps> = ({ styles = STYLES_DATA }) => {
   const { playSound } = useSound();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<StyleCard | null>(null);
@@ -22,9 +26,9 @@ const StyleLibrary: React.FC = () => {
   };
 
   const filteredStyles = useMemo(() => {
-    if (activeCategory === 'Все') return STYLES_DATA;
-    return STYLES_DATA.filter(style => style.category === activeCategory);
-  }, [activeCategory]);
+    if (activeCategory === 'Все') return styles;
+    return styles.filter(style => style.category === activeCategory);
+  }, [activeCategory, styles]);
 
   return (
     <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-8 md:py-12 pb-32">
