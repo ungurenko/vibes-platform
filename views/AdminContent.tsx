@@ -116,16 +116,24 @@ const AdminContent: React.FC<AdminContentProps> = ({
   const [customCategory, setCustomCategory] = useState<string>('');
   const [isAddingCategory, setIsAddingCategory] = useState<boolean>(false);
 
-  // Get unique categories from existing data
+  // Get unique categories from existing data + current editing item
   const getUniqueCategories = (type: 'prompts' | 'roadmaps' | 'styles') => {
+    let categories: string[] = [];
+
     if (type === 'prompts') {
-      return Array.from(new Set(prompts.map(p => p.category)));
+      categories = Array.from(new Set(prompts.map(p => p.category)));
     } else if (type === 'roadmaps') {
-      return Array.from(new Set(roadmaps.map(r => r.category)));
+      categories = Array.from(new Set(roadmaps.map(r => r.category)));
     } else if (type === 'styles') {
-      return Array.from(new Set(styles.map(s => s.category)));
+      categories = Array.from(new Set(styles.map(s => s.category)));
     }
-    return [];
+
+    // Add current editing category if it's new and not empty
+    if (editingItem?.category && !categories.includes(editingItem.category)) {
+      categories.push(editingItem.category);
+    }
+
+    return categories.filter(c => c); // Remove empty strings
   };
 
   // --- Helpers ---
@@ -179,6 +187,10 @@ const AdminContent: React.FC<AdminContentProps> = ({
   };
 
   const openEditor = (item: any | null = null) => {
+    // Reset category state when opening editor
+    setIsAddingCategory(false);
+    setCustomCategory('');
+
     if (!item) {
         if (activeTab === 'roadmaps') {
             setEditingItem({
