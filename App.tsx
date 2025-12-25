@@ -83,8 +83,12 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
     // 1. Initialize Theme
-    const savedTheme = localStorage.getItem('theme') as 'dark' | 'light' | null;
-    if (savedTheme) setTheme(savedTheme);
+    try {
+        const savedTheme = localStorage.getItem('theme') as 'dark' | 'light' | null;
+        if (savedTheme) setTheme(savedTheme);
+    } catch (e) {
+        console.warn("Theme storage access failed");
+    }
 
     // 2. Check Invite from URL
     const params = new URLSearchParams(window.location.search);
@@ -187,7 +191,9 @@ const AppContent: React.FC = () => {
     const root = window.document.documentElement;
     if (theme === 'dark') root.classList.add('dark');
     else root.classList.remove('dark');
-    localStorage.setItem('theme', theme);
+    try {
+        localStorage.setItem('theme', theme);
+    } catch (e) {}
   }, [theme]);
 
   // --- Actions ---

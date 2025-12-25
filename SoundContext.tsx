@@ -19,14 +19,18 @@ export const SoundProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
 
   useEffect(() => {
-    const savedEnabled = localStorage.getItem('vibes_sound_enabled');
-    const savedVolume = localStorage.getItem('vibes_sound_volume');
-    
-    if (savedEnabled !== null) {
-      setIsEnabled(JSON.parse(savedEnabled));
-    }
-    if (savedVolume !== null) {
-      setVolumeState(parseFloat(savedVolume));
+    try {
+        const savedEnabled = localStorage.getItem('vibes_sound_enabled');
+        const savedVolume = localStorage.getItem('vibes_sound_volume');
+        
+        if (savedEnabled !== null) {
+          setIsEnabled(JSON.parse(savedEnabled));
+        }
+        if (savedVolume !== null) {
+          setVolumeState(parseFloat(savedVolume));
+        }
+    } catch (e) {
+        console.warn("Storage access failed", e);
     }
 
     // Initialize AudioContext on first user interaction to bypass browser autoplay policy
@@ -44,7 +48,9 @@ export const SoundProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const toggleSound = () => {
     setIsEnabled(prev => {
       const newVal = !prev;
-      localStorage.setItem('vibes_sound_enabled', JSON.stringify(newVal));
+      try {
+          localStorage.setItem('vibes_sound_enabled', JSON.stringify(newVal));
+      } catch (e) {}
       if (newVal) playSound('on'); 
       return newVal;
     });
@@ -53,7 +59,9 @@ export const SoundProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const setVolume = (val: number) => {
     const clamped = Math.max(0, Math.min(1, val));
     setVolumeState(clamped);
-    localStorage.setItem('vibes_sound_volume', clamped.toString());
+    try {
+        localStorage.setItem('vibes_sound_volume', clamped.toString());
+    } catch (e) {}
     if (clamped > 0 && !isEnabled) {
         setIsEnabled(true);
     }
