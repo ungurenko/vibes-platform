@@ -178,7 +178,7 @@ const Lessons: React.FC<LessonsProps> = ({ modules, completedLessons = [], onTog
                        {activeLesson.title}
                     </h1>
                     <div className="flex items-center gap-3 text-sm text-zinc-500">
-                       <span className="flex items-center gap-1.5"><Layout size={14} /> {activeModuleId === 'recorded' ? 'Записанные уроки' : 'Прямые эфиры'}</span>
+                       <span className="flex items-center gap-1.5"><Layout size={14} /> {activeModule?.title || 'Модуль'}</span>
                        <span className="w-1 h-1 rounded-full bg-zinc-300 dark:bg-zinc-700" />
                        <span>{activeLesson.duration}</span>
                     </div>
