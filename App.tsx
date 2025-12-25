@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { Menu } from 'lucide-react';
 import Sidebar from './components/Sidebar';
@@ -37,7 +36,7 @@ import {
 } from './lib/supabase';
 
 const AppContent: React.FC = () => {
-  // ... (предыдущие состояния)
+  // --- Auth & Routing State ---
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [inviteCodeFromUrl, setInviteCodeFromUrl] = useState<string | null>(null);
@@ -49,7 +48,127 @@ const AppContent: React.FC = () => {
   const [invites, setInvites] = useState<InviteLink[]>([]);
   const [completedLessons, setCompletedLessons] = useState<string[]>([]);
   
-  // ... (остальной стейт)
+  // Dynamic Content
+  const [modules, setModules] = useState<CourseModule[]>(COURSE_MODULES);
+  const [prompts, setPrompts] = useState<PromptItem[]>(PROMPTS_DATA);
+  const [roadmaps, setRoadmaps] = useState<Roadmap[]>(ROADMAPS_DATA);
+  const [styles, setStyles] = useState<StyleCard[]>(STYLES_DATA);
+
+  // --- UI State ---
+  const [activeTab, setActiveTab] = useState<TabId>('dashboard');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [theme, setTheme] = useState<'dark' | 'light'>('light');
+  const [mode, setMode] = useState<'student' | 'admin'>('student');
+  
+  const [assistantInitialMessage, setAssistantInitialMessage] = useState<string | null>(null);
+
+  // --- Derived State ---
+  const currentUser = useMemo(() => {
+      if (!profile) return null;
+      return {
+          id: profile.id,
+          name: profile.full_name || 'Студент',
+          email: profile.email,
+          avatar: profile.avatar_url || `https://ui-avatars.com/api/?name=${profile.full_name}&background=8b5cf6&color=fff`,
+          status: 'active',
+          progress: Math.round((completedLessons.length / 20) * 100), // Approx progress
+          currentModule: 'Модуль 1',
+          lastActive: 'Только что',
+          joinedDate: profile.created_at,
+          projects: {},
+      } as Student;
+  }, [profile, completedLessons]);
+
+  // --- Effects ---
+
+  useEffect(() => {
+    // 1. Initialize Theme
+    const savedTheme = localStorage.getItem('theme') as 'dark' | 'light' | null;
+    if (savedTheme) setTheme(savedTheme);
+
+    // 2. Check Invite from URL
+    const params = new URLSearchParams(window.location.search);
+    const inviteParam = params.get('invite');
+    if (inviteParam) {
+        setInviteCodeFromUrl(inviteParam);
+        setView('register');
+    }
+
+    // 3. Supabase Auth Session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) {
+          fetchProfile(session.user.id);
+          loadUserProgress(session.user.id);
+      }
+      setIsAuthLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) {
+          fetchProfile(session.user.id);
+          loadUserProgress(session.user.id);
+          setView('app');
+      } else {
+          setProfile(null);
+          setCompletedLessons([]);
+          if (!inviteParam) setView('login');
+      }
+    });
+
+    // 4. Fetch Dynamic Content
+    loadContent();
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const loadContent = async () => {
+      const [dbModules, dbPrompts, dbRoadmaps, dbStyles] = await Promise.all([
+          fetchAppContent('modules'),
+          fetchAppContent('prompts'),
+          fetchAppContent('roadmaps'),
+          fetchAppContent('styles')
+      ]);
+
+      if (dbModules) setModules(dbModules);
+      if (dbPrompts) setPrompts(dbPrompts);
+      if (dbRoadmaps) setRoadmaps(dbRoadmaps);
+      if (dbStyles) setStyles(dbStyles);
+  };
+
+  const loadUserProgress = async (userId: string) => {
+      const progress = await fetchUserProgress(userId);
+      setCompletedLessons(progress);
+  };
+
+  const fetchProfile = async (userId: string) => {
+      const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
+      
+      if (data) {
+          if (data.is_banned) {
+              await supabase.auth.signOut();
+              setSession(null);
+              setProfile(null);
+              alert("Ваш аккаунт заблокирован администратором.");
+              setView('login');
+              return;
+          }
+
+          setProfile(data);
+          if (data.is_admin) {
+              setMode('admin');
+              loadAdminData(); // Load students if admin
+          } else {
+              setMode('student');
+              if (!data.has_onboarded) setView('onboarding');
+          }
+      }
+  };
 
   const loadAdminData = async () => {
       try {
@@ -64,7 +183,88 @@ const AppContent: React.FC = () => {
       }
   };
 
-  // ... (handleRegister и другие функции)
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (theme === 'dark') root.classList.add('dark');
+    else root.classList.remove('dark');
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  // --- Actions ---
+
+  const handleToggleLesson = async (lessonId: string) => {
+      if (!currentUser) return;
+      
+      const isComplete = !completedLessons.includes(lessonId);
+      
+      // Optimistic Update
+      setCompletedLessons(prev => 
+          isComplete ? [...prev, lessonId] : prev.filter(id => id !== lessonId)
+      );
+
+      try {
+          await toggleLessonComplete(currentUser.id, lessonId, isComplete);
+      } catch (e) {
+          console.error("Failed to save progress", e);
+          // Revert on error
+          setCompletedLessons(prev => 
+             !isComplete ? [...prev, lessonId] : prev.filter(id => id !== lessonId)
+          );
+      }
+  };
+
+  const handleLogin = async (email: string, password: string) => {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) alert(error.message);
+  };
+
+  const handleRegister = async (data: { name: string; email: string; avatar?: string; password?: string }) => {
+      const { data: authData, error } = await supabase.auth.signUp({
+          email: data.email,
+          password: data.password || '',
+          options: {
+              data: {
+                  full_name: data.name,
+                  avatar_url: data.avatar
+              }
+          }
+      });
+
+      if (error) {
+          alert(error.message);
+      } else {
+          if (inviteCodeFromUrl) {
+              await useInvite(inviteCodeFromUrl, data.email);
+          }
+          window.history.replaceState({}, '', window.location.pathname);
+          // Onboarding will be triggered by profile fetch effect
+      }
+  };
+
+  const handleLogout = async () => {
+      await supabase.auth.signOut();
+      setView('login');
+  };
+
+  const completeOnboarding = async () => {
+      if (currentUser) {
+          await completeOnboardingDB(currentUser.id);
+          fetchProfile(currentUser.id); // Refresh profile to get updated status
+      }
+      setView('app');
+  };
+
+  const validateInvite = async (code: string): Promise<InviteLink | null> => {
+      const inviteData = await checkInvite(code);
+      if (!inviteData) return null;
+      return {
+          id: inviteData.id,
+          token: inviteData.token,
+          status: inviteData.status,
+          created: inviteData.created_at,
+          expiresAt: inviteData.expires_at
+      };
+  };
 
   const handleGenerateInvites = async (count: number) => {
       try {
@@ -86,31 +286,6 @@ const AppContent: React.FC = () => {
       } catch (e) {
           alert("Ошибка при удалении");
       }
-  };
-
-  const renderContent = () => {
-    if (!session) return <Login onLogin={handleLogin} onNavigateToRegister={() => setView('register')} onSimulateResetLink={() => setView('reset-password')} />;
-
-    switch (activeTab) {
-      case 'dashboard': return <Home onNavigate={setActiveTab} />;
-      // Pass completedLessons and handler to Lessons
-      case 'lessons': return <Lessons modules={modules} completedLessons={completedLessons} onToggleLesson={handleToggleLesson} />;
-      case 'roadmaps': return <Roadmaps roadmaps={roadmaps} />;
-      case 'styles': return <StyleLibrary styles={styles} />;
-      case 'prompts': return <PromptBase prompts={prompts} />;
-      case 'glossary': return <Glossary onNavigate={setActiveTab} onAskAI={handleAskAI} />;
-      case 'assistant': return <Assistant initialMessage={assistantInitialMessage} onMessageHandled={() => setAssistantInitialMessage(null)} />;
-      case 'profile': return currentUser ? <UserProfile user={currentUser} /> : <Home onNavigate={setActiveTab} />;
-      
-      // Admin Views
-      case 'admin-students': return <AdminStudents students={students} onUpdateStudent={() => {}} onAddStudent={() => {}} onDeleteStudent={() => {}} />;
-      case 'admin-content': return <AdminContent modules={modules} onUpdateModules={setModules} prompts={prompts} onUpdatePrompts={setPrompts} styles={styles} onUpdateStyles={setStyles} roadmaps={roadmaps} onUpdateRoadmaps={setRoadmaps} />;
-      case 'admin-calls': return <AdminCalls />;
-      case 'admin-assistant': return <AdminAssistant />;
-      case 'admin-settings': return <AdminSettings invites={invites} onGenerateInvites={handleGenerateInvites} onDeleteInvite={handleDeleteInvite} onDeactivateInvite={() => {}} />;
-
-      default: return mode === 'admin' ? <AdminStudents students={students} onUpdateStudent={() => {}} onAddStudent={() => {}} onDeleteStudent={() => {}} /> : <Home onNavigate={setActiveTab} />;
-    }
   };
 
   const handleAskAI = (prompt: string) => {
@@ -140,8 +315,7 @@ const AppContent: React.FC = () => {
 
     switch (activeTab) {
       case 'dashboard': return <Home onNavigate={setActiveTab} />;
-      case 'lessons': return <Lessons modules={modules} />;
-      // Pass dynamic data to views
+      case 'lessons': return <Lessons modules={modules} completedLessons={completedLessons} onToggleLesson={handleToggleLesson} />;
       case 'roadmaps': return <Roadmaps roadmaps={roadmaps} />;
       case 'styles': return <StyleLibrary styles={styles} />;
       case 'prompts': return <PromptBase prompts={prompts} />;
@@ -151,11 +325,10 @@ const AppContent: React.FC = () => {
       
       // Admin Views
       case 'admin-students': return <AdminStudents students={students} onUpdateStudent={() => {}} onAddStudent={() => {}} onDeleteStudent={() => {}} />;
-      // Pass updaters to admin views
       case 'admin-content': return <AdminContent modules={modules} onUpdateModules={setModules} prompts={prompts} onUpdatePrompts={setPrompts} styles={styles} onUpdateStyles={setStyles} roadmaps={roadmaps} onUpdateRoadmaps={setRoadmaps} />;
       case 'admin-calls': return <AdminCalls />;
       case 'admin-assistant': return <AdminAssistant />;
-      case 'admin-settings': return <AdminSettings invites={invites} onGenerateInvites={() => {}} onDeleteInvite={() => {}} onDeactivateInvite={() => {}} />;
+      case 'admin-settings': return <AdminSettings invites={invites} onGenerateInvites={handleGenerateInvites} onDeleteInvite={handleDeleteInvite} onDeactivateInvite={() => {}} />;
 
       default: return mode === 'admin' ? <AdminStudents students={students} onUpdateStudent={() => {}} onAddStudent={() => {}} onDeleteStudent={() => {}} /> : <Home onNavigate={setActiveTab} />;
     }
