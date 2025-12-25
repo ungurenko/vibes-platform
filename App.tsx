@@ -88,18 +88,30 @@ const AppContent: React.FC = () => {
       }
   };
 
-  // ... (внутри renderContent)
-  // Находим кейс 'admin-settings' и обновляем пропсы
   const renderContent = () => {
-    // ...
+    if (!session) return <Login onLogin={handleLogin} onNavigateToRegister={() => setView('register')} onSimulateResetLink={() => setView('reset-password')} />;
+
     switch (activeTab) {
-      // ...
+      case 'dashboard': return <Home onNavigate={setActiveTab} />;
+      // Pass completedLessons and handler to Lessons
+      case 'lessons': return <Lessons modules={modules} completedLessons={completedLessons} onToggleLesson={handleToggleLesson} />;
+      case 'roadmaps': return <Roadmaps roadmaps={roadmaps} />;
+      case 'styles': return <StyleLibrary styles={styles} />;
+      case 'prompts': return <PromptBase prompts={prompts} />;
+      case 'glossary': return <Glossary onNavigate={setActiveTab} onAskAI={handleAskAI} />;
+      case 'assistant': return <Assistant initialMessage={assistantInitialMessage} onMessageHandled={() => setAssistantInitialMessage(null)} />;
+      case 'profile': return currentUser ? <UserProfile user={currentUser} /> : <Home onNavigate={setActiveTab} />;
+      
+      // Admin Views
+      case 'admin-students': return <AdminStudents students={students} onUpdateStudent={() => {}} onAddStudent={() => {}} onDeleteStudent={() => {}} />;
+      case 'admin-content': return <AdminContent modules={modules} onUpdateModules={setModules} prompts={prompts} onUpdatePrompts={setPrompts} styles={styles} onUpdateStyles={setStyles} roadmaps={roadmaps} onUpdateRoadmaps={setRoadmaps} />;
+      case 'admin-calls': return <AdminCalls />;
+      case 'admin-assistant': return <AdminAssistant />;
       case 'admin-settings': return <AdminSettings invites={invites} onGenerateInvites={handleGenerateInvites} onDeleteInvite={handleDeleteInvite} onDeactivateInvite={() => {}} />;
-      // ...
+
+      default: return mode === 'admin' ? <AdminStudents students={students} onUpdateStudent={() => {}} onAddStudent={() => {}} onDeleteStudent={() => {}} /> : <Home onNavigate={setActiveTab} />;
     }
   };
-
-
 
   const handleAskAI = (prompt: string) => {
       setAssistantInitialMessage(prompt);
