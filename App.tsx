@@ -82,6 +82,13 @@ const AppContent: React.FC = () => {
   // --- Effects ---
 
   useEffect(() => {
+    // 0. Debug Config
+    console.log("VIBES Initializing...", {
+        hasUrl: !!import.meta.env.VITE_SUPABASE_URL,
+        hasKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
+        env: import.meta.env.MODE
+    });
+
     // 1. Initialize Theme
     try {
         const savedTheme = localStorage.getItem('theme') as 'dark' | 'light' | null;
@@ -220,6 +227,13 @@ const AppContent: React.FC = () => {
   };
 
   const handleLogin = async (email: string, password: string) => {
+      // Check if Supabase is actually configured
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      if (!supabaseUrl || supabaseUrl.includes('placeholder')) {
+          alert("Ошибка конфигурации: Не заданы переменные окружения VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY на Vercel.");
+          return;
+      }
+
       try {
           const { error } = await supabase.auth.signInWithPassword({ email, password });
           if (error) throw error;
