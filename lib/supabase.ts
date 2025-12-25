@@ -19,6 +19,31 @@ if (!supabaseUrl || !supabaseAnonKey || !isValidUrl(supabaseUrl)) {
   console.info('Check your Vercel Environment Variables: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY');
 }
 
+// Custom storage handler to handle QuotaExceededError (especially in Safari/Private Mode)
+const customStorage = {
+    getItem: (key: string) => {
+        try {
+            return localStorage.getItem(key);
+        } catch {
+            return null;
+        }
+    },
+    setItem: (key: string, value: string) => {
+        try {
+            localStorage.setItem(key, value);
+        } catch (e: any) {
+            console.warn("Storage write failed, using fallback:", e.name);
+            // If quota exceeded, we just don't persist it to disk
+            // Supabase will keep the session in memory for the current tab
+        }
+    },
+    removeItem: (key: string) => {
+        try {
+            localStorage.removeItem(key);
+        } catch {}
+    }
+};
+
 export const supabase = createClient(
     supabaseUrl || 'https://placeholder-if-missing.supabase.co', 
     supabaseAnonKey || 'placeholder-key',
@@ -27,7 +52,8 @@ export const supabase = createClient(
             persistSession: true,
             autoRefreshToken: true,
             detectSessionInUrl: true,
-            storageKey: 'vibes_auth_token'
+            storageKey: 'vibes_auth_token',
+            storage: customStorage
         }
     }
 );
