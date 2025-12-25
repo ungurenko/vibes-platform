@@ -25,31 +25,6 @@ const Login: React.FC<LoginProps> = ({
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<{
-      storageAvailable: boolean;
-      configValid: boolean;
-      lastError: string | null;
-  } | null>(null);
-
-  const checkDiagnostics = () => {
-      const storageAvailable = (() => {
-          try {
-              localStorage.setItem('test', '1');
-              localStorage.removeItem('test');
-              return true;
-          } catch (e) {
-              return false;
-          }
-      })();
-
-      const configValid = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
-      
-      setDebugInfo(prev => ({
-          storageAvailable,
-          configValid,
-          lastError: null
-      }));
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,11 +34,7 @@ const Login: React.FC<LoginProps> = ({
     try {
         await onLogin(email, password);
     } catch (err: any) {
-        setDebugInfo(prev => ({
-            storageAvailable: prev?.storageAvailable ?? false,
-            configValid: prev?.configValid ?? false,
-            lastError: err.message || JSON.stringify(err)
-        }));
+        // Error handling is managed by App.tsx (alerts)
     } finally {
         setIsLoading(false);
     }
@@ -83,46 +54,6 @@ const Login: React.FC<LoginProps> = ({
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md relative z-10"
       >
-        {/* Debug Panel Toggle */}
-        <button 
-            onClick={checkDiagnostics}
-            className="absolute -top-12 left-1/2 -translate-x-1/2 text-[10px] text-zinc-400 opacity-20 hover:opacity-100 transition-opacity uppercase tracking-widest font-mono"
-        >
-            [ Run Diagnostics ]
-        </button>
-
-        {debugInfo && (
-            <motion.div 
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                className="mb-6 p-4 bg-zinc-900 border border-white/10 rounded-2xl font-mono text-[11px] text-zinc-300 overflow-hidden"
-            >
-                <h3 className="text-violet-400 font-bold mb-2 flex items-center justify-between">
-                    SYSTEM DIAGNOSTICS
-                    <button onClick={() => setDebugInfo(null)} className="text-zinc-500 hover:text-white">✕</button>
-                </h3>
-                <div className="space-y-1">
-                    <p className="flex justify-between">
-                        <span>LocalStorage:</span> 
-                        <span className={debugInfo.storageAvailable ? "text-emerald-500" : "text-red-500"}>
-                            {debugInfo.storageAvailable ? 'OK' : 'BLOCKED/FULL'}
-                        </span>
-                    </p>
-                    <p className="flex justify-between">
-                        <span>Supabase Config:</span> 
-                        <span className={debugInfo.configValid ? "text-emerald-500" : "text-red-500"}>
-                            {debugInfo.configValid ? 'OK' : 'MISSING'}
-                        </span>
-                    </p>
-                    {debugInfo.lastError && (
-                        <div className="mt-2 pt-2 border-t border-white/5">
-                            <p className="text-red-400 break-words font-bold">Error Trace:</p>
-                            <p className="text-[10px] text-zinc-500 leading-tight mt-1">{debugInfo.lastError}</p>
-                        </div>
-                    )}
-                </div>
-            </motion.div>
-        )}
         <div className="text-center mb-8">
             <img 
               src="https://i.imgur.com/f3UfhpM.png" 

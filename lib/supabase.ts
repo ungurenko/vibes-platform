@@ -19,7 +19,6 @@ if (!supabaseUrl || !supabaseAnonKey || !isValidUrl(supabaseUrl)) {
   console.info('Check your Vercel Environment Variables: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY');
 }
 
-// Custom storage handler to handle QuotaExceededError (especially in Safari/Private Mode)
 const customStorage = {
     getItem: (key: string) => {
         try {
@@ -32,9 +31,24 @@ const customStorage = {
         try {
             localStorage.setItem(key, value);
         } catch (e: any) {
-            console.warn("Storage write failed, using fallback:", e.name);
-            // If quota exceeded, we just don't persist it to disk
-            // Supabase will keep the session in memory for the current tab
+            // If it's a quota error, we try to clear old chat history to make room
+            if (e.name === 'QuotaExceededError' || e.message?.includes('quota')) {
+                const keysToRemove = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    if (k && (k.includes('chat_history') || k.includes('vibes_chat'))) {
+                        keysToRemove.push(k);
+                    }
+                }
+                keysToRemove.forEach(k => localStorage.removeItem(k));
+                
+                // Try again after cleanup
+                try {
+                    localStorage.setItem(key, value);
+                } catch {
+                    console.error("Storage still full after cleanup");
+                }
+            }
         }
     },
     removeItem: (key: string) => {
@@ -52,7 +66,6 @@ export const supabase = createClient(
             persistSession: true,
             autoRefreshToken: true,
             detectSessionInUrl: true,
-            storageKey: 'vibes_auth_token',
             storage: customStorage
         }
     }

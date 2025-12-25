@@ -82,14 +82,6 @@ const AppContent: React.FC = () => {
   // --- Effects ---
 
   useEffect(() => {
-    // 0. Debug Config
-    console.log("VIBES Initializing...", {
-        hasUrl: !!import.meta.env.VITE_SUPABASE_URL,
-        hasKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
-        env: import.meta.env.MODE,
-        urlValue: import.meta.env.VITE_SUPABASE_URL ? "Exists (hidden)" : "MISSING"
-    });
-
     // 1. Initialize Theme
     try {
         const savedTheme = localStorage.getItem('theme') as 'dark' | 'light' | null;
