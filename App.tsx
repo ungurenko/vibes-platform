@@ -220,8 +220,22 @@ const AppContent: React.FC = () => {
   };
 
   const handleLogin = async (email: string, password: string) => {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) alert(error.message);
+      try {
+          const { error } = await supabase.auth.signInWithPassword({ email, password });
+          if (error) throw error;
+      } catch (e: any) {
+          if (e.name === 'QuotaExceededError' || e.message?.includes('QuotaExceededError')) {
+              localStorage.removeItem('vibes_chat_history');
+              try {
+                  const { error: retryError } = await supabase.auth.signInWithPassword({ email, password });
+                  if (retryError) alert(retryError.message);
+              } catch (retryE: any) {
+                   alert(retryE.message || "Ошибка входа (Storage Full)");
+              }
+          } else {
+              alert(e.message || "Ошибка входа");
+          }
+      }
   };
 
   const handleRegister = async (data: { name: string; email: string; avatar?: string; password?: string }) => {

@@ -214,7 +214,11 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled 
             .update({ messages, updated_at: new Date().toISOString() })
             .eq('id', chatId);
         
-        localStorage.setItem('vibes_chat_history', JSON.stringify(messages));
+        try {
+            localStorage.setItem('vibes_chat_history', JSON.stringify(messages.slice(-50)));
+        } catch (e) {
+            console.warn("Local storage full, skipping chat save");
+        }
     };
 
     const timer = setTimeout(saveChat, 1000); // Debounce saves
