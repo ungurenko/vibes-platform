@@ -86,7 +86,8 @@ const AppContent: React.FC = () => {
     console.log("VIBES Initializing...", {
         hasUrl: !!import.meta.env.VITE_SUPABASE_URL,
         hasKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
-        env: import.meta.env.MODE
+        env: import.meta.env.MODE,
+        urlValue: import.meta.env.VITE_SUPABASE_URL ? "Exists (hidden)" : "MISSING"
     });
 
     // 1. Initialize Theme
