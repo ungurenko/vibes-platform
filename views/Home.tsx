@@ -1,12 +1,12 @@
 
-import React, { useState } from 'react';
-import { 
-  Calendar, 
-  CheckCircle2, 
+import React, { useState, useEffect } from 'react';
+import {
+  Calendar,
+  CheckCircle2,
   Play,
   Palette,
   Terminal,
-  Book, 
+  Book,
   Bot,
   Sparkles,
   Target
@@ -14,6 +14,7 @@ import {
 import { TabId } from '../types';
 import { DASHBOARD_STAGES } from '../data';
 import { motion } from 'framer-motion';
+import { fetchAllCalls } from '../lib/supabase';
 
 interface HomeProps {
   onNavigate: (tab: TabId) => void;
@@ -22,8 +23,29 @@ interface HomeProps {
 const Home: React.FC<HomeProps> = ({ onNavigate }) => {
   const [activeStageId, setActiveStageId] = useState<number>(1);
   const [completedTasks, setCompletedTasks] = useState<string[]>(['t1-1', 't1-2']);
+  const [upcomingCall, setUpcomingCall] = useState<any>(null);
 
   const activeStage = DASHBOARD_STAGES.find(s => s.id === activeStageId) || DASHBOARD_STAGES[0];
+
+  // Load upcoming call
+  useEffect(() => {
+    loadUpcomingCall();
+  }, []);
+
+  const loadUpcomingCall = async () => {
+    try {
+      const calls = await fetchAllCalls();
+      // Find the next scheduled or live call
+      const now = new Date();
+      const upcoming = calls.find((call: any) => {
+        const callDate = new Date(call.date + 'T' + call.time);
+        return call.status === 'scheduled' || call.status === 'live';
+      });
+      setUpcomingCall(upcoming);
+    } catch (error) {
+      console.error('Error loading upcoming call:', error);
+    }
+  };
 
   const handleTaskToggle = (taskId: string) => {
     setCompletedTasks(prev => 
@@ -191,36 +213,51 @@ const Home: React.FC<HomeProps> = ({ onNavigate }) => {
         </motion.div>
 
         {/* 4. EVENT WIDGET - Spans 1 col, 1 row */}
-        <motion.div variants={cardVariants} className="md:col-span-1 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-[2.5rem] p-6 text-white relative overflow-hidden group hover:scale-[1.02] transition-transform shadow-lg shadow-emerald-500/20">
-           <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2 group-hover:bg-white/30 transition-colors" />
-           <div className="absolute bottom-0 left-0 w-24 h-24 bg-black/10 rounded-full blur-xl translate-y-1/3 -translate-x-1/3" />
-           
-           <div className="relative z-10 flex flex-col h-full">
-              <div className="flex justify-between items-start mb-auto">
-                 <div className="p-2.5 bg-white/20 backdrop-blur-md rounded-2xl border border-white/20 shadow-inner">
-                    <Calendar size={20} />
-                 </div>
-                 <div className="px-3 py-1 bg-white/20 backdrop-blur-md rounded-full border border-white/10 text-xs font-bold uppercase tracking-wider shadow-sm">
-                    Завтра
-                 </div>
-              </div>
-              
-              <div className="mt-6">
-                 <div className="flex items-baseline gap-2 mb-2">
-                    <span className="text-4xl font-display font-bold">19:00</span>
-                    <span className="text-emerald-100 font-medium text-sm">МСК</span>
-                 </div>
-                 
-                 <div className="h-px w-full bg-gradient-to-r from-white/40 to-transparent mb-4" />
+        {upcomingCall ? (
+          <motion.div variants={cardVariants} className={`md:col-span-1 rounded-[2.5rem] p-6 text-white relative overflow-hidden group hover:scale-[1.02] transition-transform shadow-lg ${
+            upcomingCall.status === 'live'
+              ? 'bg-gradient-to-br from-red-500 to-rose-600 shadow-red-500/20'
+              : 'bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/20'
+          }`}>
+             <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2 group-hover:bg-white/30 transition-colors" />
+             <div className="absolute bottom-0 left-0 w-24 h-24 bg-black/10 rounded-full blur-xl translate-y-1/3 -translate-x-1/3" />
 
-                 <div className="text-[10px] font-bold text-emerald-100 uppercase tracking-widest mb-1.5 opacity-90 flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                    Созвон
-                 </div>
-                 <h3 className="text-lg font-bold leading-tight text-white/95">Разбор домашек: Лендинг</h3>
-              </div>
-           </div>
-        </motion.div>
+             <div className="relative z-10 flex flex-col h-full">
+                <div className="flex justify-between items-start mb-auto">
+                   <div className="p-2.5 bg-white/20 backdrop-blur-md rounded-2xl border border-white/20 shadow-inner">
+                      <Calendar size={20} />
+                   </div>
+                   <div className="px-3 py-1 bg-white/20 backdrop-blur-md rounded-full border border-white/10 text-xs font-bold uppercase tracking-wider shadow-sm">
+                      {upcomingCall.status === 'live' ? 'Сейчас' : new Date(upcomingCall.date) > new Date() ? 'Скоро' : 'Сегодня'}
+                   </div>
+                </div>
+
+                <div className="mt-6">
+                   <div className="flex items-baseline gap-2 mb-2">
+                      <span className="text-4xl font-display font-bold">{upcomingCall.time}</span>
+                      <span className={`font-medium text-sm ${upcomingCall.status === 'live' ? 'text-red-100' : 'text-emerald-100'}`}>МСК</span>
+                   </div>
+
+                   <div className="h-px w-full bg-gradient-to-r from-white/40 to-transparent mb-4" />
+
+                   <div className={`text-[10px] font-bold uppercase tracking-widest mb-1.5 opacity-90 flex items-center gap-2 ${
+                     upcomingCall.status === 'live' ? 'text-red-100' : 'text-emerald-100'
+                   }`}>
+                      {upcomingCall.status === 'live' && <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
+                      {upcomingCall.status === 'live' ? 'Идёт сейчас' : 'Созвон'}
+                   </div>
+                   <h3 className="text-lg font-bold leading-tight text-white/95 line-clamp-2">{upcomingCall.topic}</h3>
+                </div>
+             </div>
+          </motion.div>
+        ) : (
+          <motion.div variants={cardVariants} className="md:col-span-1 bg-zinc-100 dark:bg-zinc-900 rounded-[2.5rem] p-6 border border-zinc-200 dark:border-white/5 flex items-center justify-center">
+            <div className="text-center">
+              <Calendar size={32} className="mx-auto mb-3 text-zinc-400" />
+              <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Нет запланированных созвонов</p>
+            </div>
+          </motion.div>
+        )}
 
       </div>
     </motion.div>

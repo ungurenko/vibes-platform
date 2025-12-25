@@ -1,16 +1,16 @@
 
-import React, { useState } from 'react';
-import { 
-  Video, 
-  Clock, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Link, 
-  Bell, 
-  FileText, 
-  CheckCircle2, 
-  Save, 
+import React, { useState, useEffect } from 'react';
+import {
+  Video,
+  Clock,
+  Plus,
+  Edit,
+  Trash2,
+  Link,
+  Bell,
+  FileText,
+  CheckCircle2,
+  Save,
   Upload,
   PlayCircle,
   Users,
@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Drawer, PageHeader, Input, Select, ConfirmModal } from '../components/Shared';
+import { fetchAllCalls, createCall, updateCall, deleteCall } from '../lib/supabase';
 
 // --- Types ---
 
@@ -45,48 +46,7 @@ interface AdminCall {
   reminders: ReminderType[];
 }
 
-// --- Mock Data ---
-
-const INITIAL_CALLS: AdminCall[] = [
-  {
-    id: '1',
-    date: '2024-10-24',
-    time: '19:00',
-    duration: '90 мин',
-    topic: 'Разбор домашних заданий: Лендинг',
-    description: 'Смотрим работы студентов, разбираем типичные ошибки в верстке и дизайне. Q&A сессия в конце.',
-    status: 'scheduled',
-    meetingUrl: 'https://zoom.us/j/123456789',
-    attendeesCount: 45,
-    reminders: ['24h', '1h']
-  },
-  {
-    id: '2',
-    date: '2024-10-24',
-    time: '18:00', 
-    duration: '60 мин',
-    topic: 'Live Coding: Анимации во Framer Motion',
-    description: 'В прямом эфире верстаем сложную анимацию появления карточек. Практический мастер-класс.',
-    status: 'live',
-    meetingUrl: 'https://zoom.us/j/987654321',
-    attendeesCount: 128,
-    reminders: ['15m']
-  },
-  {
-    id: '3',
-    date: '2024-10-20',
-    time: '20:00',
-    duration: '120 мин',
-    topic: 'Введение в React: Компоненты и Пропсы',
-    description: 'Фундаментальная лекция модуля 2. Разбираем, почему React так популярен и как мыслить компонентами.',
-    status: 'completed',
-    meetingUrl: 'https://zoom.us/j/111222333',
-    recordingUrl: 'https://youtube.com/watch?v=dQw4w9WgXcQ',
-    materials: [{ name: 'Syllabus.pdf', size: '2.4 MB' }, { name: 'Code_Snippets.zip', size: '1.1 MB' }],
-    attendeesCount: 210,
-    reminders: []
-  }
-];
+// Mock data removed - now using Supabase database
 
 const REMINDER_OPTIONS: { id: ReminderType; label: string }[] = [
     { id: '24h', label: 'За 24 часа' },
@@ -95,14 +55,32 @@ const REMINDER_OPTIONS: { id: ReminderType; label: string }[] = [
 ];
 
 const AdminCalls: React.FC = () => {
-  const [calls, setCalls] = useState<AdminCall[]>(INITIAL_CALLS);
+  const [calls, setCalls] = useState<AdminCall[]>([]);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingCall, setEditingCall] = useState<Partial<AdminCall>>({});
   const [reminderSentId, setReminderSentId] = useState<string | null>(null);
-  
+  const [isLoading, setIsLoading] = useState(true);
+
   // Deletion State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [callToDelete, setCallToDelete] = useState<string | null>(null);
+
+  // Load calls from database
+  useEffect(() => {
+    loadCalls();
+  }, []);
+
+  const loadCalls = async () => {
+    try {
+      setIsLoading(true);
+      const data = await fetchAllCalls();
+      setCalls(data);
+    } catch (error) {
+      console.error('Error loading calls:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // --- Actions ---
 
@@ -111,11 +89,17 @@ const AdminCalls: React.FC = () => {
       setIsDeleteModalOpen(true);
   };
 
-  const executeDelete = () => {
+  const executeDelete = async () => {
     if (callToDelete) {
-      setCalls(prev => prev.filter(c => c.id !== callToDelete));
-      setIsDeleteModalOpen(false);
-      setCallToDelete(null);
+      try {
+        await deleteCall(callToDelete);
+        setCalls(prev => prev.filter(c => c.id !== callToDelete));
+        setIsDeleteModalOpen(false);
+        setCallToDelete(null);
+      } catch (error) {
+        console.error('Error deleting call:', error);
+        alert('Ошибка при удалении созвона');
+      }
     }
   };
 
@@ -141,24 +125,28 @@ const AdminCalls: React.FC = () => {
     setIsEditorOpen(true);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingCall.topic) return;
 
-    setCalls(prev => {
-      const exists = prev.find(c => c.id === editingCall.id);
-      if (exists) {
-        return prev.map(c => c.id === editingCall.id ? { ...c, ...editingCall } as AdminCall : c);
+    try {
+      if (editingCall.id) {
+        // Update existing call
+        const updatedCall = await updateCall(editingCall.id, editingCall);
+        setCalls(prev => prev.map(c => c.id === editingCall.id ? updatedCall as AdminCall : c));
       } else {
-        const newCall = { 
-            ...editingCall, 
-            id: Date.now().toString(),
-            attendeesCount: 0 
-        } as AdminCall;
-        return [newCall, ...prev];
+        // Create new call
+        const newCall = await createCall({
+          ...editingCall,
+          attendeesCount: 0
+        });
+        setCalls(prev => [newCall as AdminCall, ...prev]);
       }
-    });
-    setIsEditorOpen(false);
+      setIsEditorOpen(false);
+    } catch (error) {
+      console.error('Error saving call:', error);
+      alert('Ошибка при сохранении созвона');
+    }
   };
 
   const updateField = (field: keyof AdminCall, value: any) => {
@@ -230,9 +218,38 @@ const AdminCalls: React.FC = () => {
         }
       />
 
+      {/* Loading State */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-violet-200 dark:border-violet-500/20 border-t-violet-600 dark:border-t-violet-400 rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-zinc-500 dark:text-zinc-400 font-medium">Загрузка созвонов...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!isLoading && calls.length === 0 && (
+        <div className="text-center py-20">
+          <div className="w-20 h-20 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-4">
+            <CalendarCheck size={32} className="text-zinc-400" />
+          </div>
+          <h3 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">Нет созвонов</h3>
+          <p className="text-zinc-500 dark:text-zinc-400 mb-6">Начните с создания первого созвона</p>
+          <button
+            onClick={() => openEditor()}
+            className="px-6 py-3 bg-violet-600 text-white rounded-xl font-bold hover:bg-violet-500 transition-colors inline-flex items-center gap-2"
+          >
+            <Plus size={18} />
+            Добавить созвон
+          </button>
+        </div>
+      )}
+
       {/* Calls List */}
-      <div className="space-y-6">
-        <AnimatePresence>
+      {!isLoading && calls.length > 0 && (
+        <div className="space-y-6">
+          <AnimatePresence>
             {calls.map((call) => (
                 <motion.div
                     key={call.id}
@@ -376,8 +393,9 @@ const AdminCalls: React.FC = () => {
                     </div>
                 </motion.div>
             ))}
-        </AnimatePresence>
-      </div>
+          </AnimatePresence>
+        </div>
+      )}
 
       {/* Editor Drawer */}
       <Drawer 

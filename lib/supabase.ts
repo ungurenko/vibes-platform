@@ -301,3 +301,114 @@ export const uploadFile = async (file: File, path: string = 'uploads') => {
 
     return publicUrl;
 };
+
+// --- Calls Management ---
+
+export const fetchAllCalls = async () => {
+    const { data, error } = await supabase
+        .from('calls')
+        .select('*')
+        .order('date', { ascending: false })
+        .order('time', { ascending: false });
+
+    if (error) throw error;
+
+    return data.map(call => ({
+        id: call.id,
+        date: call.date,
+        time: call.time,
+        duration: call.duration,
+        topic: call.topic,
+        description: call.description,
+        status: call.status,
+        meetingUrl: call.meeting_url,
+        recordingUrl: call.recording_url,
+        materials: call.materials || [],
+        attendeesCount: call.attendees_count || 0,
+        reminders: call.reminders || []
+    }));
+};
+
+export const createCall = async (callData: any) => {
+    const { data, error } = await supabase
+        .from('calls')
+        .insert([{
+            date: callData.date,
+            time: callData.time,
+            duration: callData.duration,
+            topic: callData.topic,
+            description: callData.description,
+            status: callData.status,
+            meeting_url: callData.meetingUrl,
+            recording_url: callData.recordingUrl,
+            materials: callData.materials || [],
+            attendees_count: callData.attendeesCount || 0,
+            reminders: callData.reminders || []
+        }])
+        .select()
+        .single();
+
+    if (error) throw error;
+
+    return {
+        id: data.id,
+        date: data.date,
+        time: data.time,
+        duration: data.duration,
+        topic: data.topic,
+        description: data.description,
+        status: data.status,
+        meetingUrl: data.meeting_url,
+        recordingUrl: data.recording_url,
+        materials: data.materials || [],
+        attendeesCount: data.attendees_count || 0,
+        reminders: data.reminders || []
+    };
+};
+
+export const updateCall = async (id: string, callData: any) => {
+    const { data, error } = await supabase
+        .from('calls')
+        .update({
+            date: callData.date,
+            time: callData.time,
+            duration: callData.duration,
+            topic: callData.topic,
+            description: callData.description,
+            status: callData.status,
+            meeting_url: callData.meetingUrl,
+            recording_url: callData.recordingUrl,
+            materials: callData.materials || [],
+            attendees_count: callData.attendeesCount || 0,
+            reminders: callData.reminders || []
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+    if (error) throw error;
+
+    return {
+        id: data.id,
+        date: data.date,
+        time: data.time,
+        duration: data.duration,
+        topic: data.topic,
+        description: data.description,
+        status: data.status,
+        meetingUrl: data.meeting_url,
+        recordingUrl: data.recording_url,
+        materials: data.materials || [],
+        attendeesCount: data.attendees_count || 0,
+        reminders: data.reminders || []
+    };
+};
+
+export const deleteCall = async (id: string) => {
+    const { error } = await supabase
+        .from('calls')
+        .delete()
+        .eq('id', id);
+
+    if (error) throw error;
+};
