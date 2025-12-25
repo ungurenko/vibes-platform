@@ -224,13 +224,32 @@ const AppContent: React.FC = () => {
           const { error } = await supabase.auth.signInWithPassword({ email, password });
           if (error) throw error;
       } catch (e: any) {
-          if (e.name === 'QuotaExceededError' || e.message?.includes('QuotaExceededError')) {
-              localStorage.removeItem('vibes_chat_history');
+          const isQuotaError = e.name === 'QuotaExceededError' || 
+                               e.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+                               e.message?.toLowerCase().includes('quota') ||
+                               e.message?.toLowerCase().includes('exceeded');
+
+          if (isQuotaError) {
+              console.warn("Storage quota exceeded. Attempting aggressive cleanup...");
+              
               try {
+                  // 1. Try to save theme
+                  const theme = localStorage.getItem('theme');
+                  
+                  // 2. Clear everything
+                  localStorage.clear();
+                  
+                  // 3. Restore theme
+                  if (theme) localStorage.setItem('theme', theme);
+                  
+                  // 4. Retry login
                   const { error: retryError } = await supabase.auth.signInWithPassword({ email, password });
-                  if (retryError) alert(retryError.message);
+                  if (retryError) throw retryError;
+                  
               } catch (retryE: any) {
-                   alert(retryE.message || "Ошибка входа (Storage Full)");
+                   // If it fails again, it's likely Private Mode (quota = 0)
+                   console.error("Login retry failed:", retryE);
+                   alert("Не удалось войти. \n\nВозможные причины:\n1. Вы в режиме «Инкогнито» (Private Mode), где память отключена.\n2. Память браузера полностью забита.\n\nПожалуйста, выйдите из инкогнито или очистите кэш браузера вручную.");
               }
           } else {
               alert(e.message || "Ошибка входа");
