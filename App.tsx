@@ -230,8 +230,9 @@ const AppContent: React.FC = () => {
       // Check if Supabase is actually configured
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       if (!supabaseUrl || supabaseUrl.includes('placeholder')) {
-          alert("Ошибка конфигурации: Не заданы переменные окружения VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY на Vercel.");
-          return;
+          const msg = "Ошибка конфигурации: Не заданы переменные окружения VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY на Vercel.";
+          alert(msg);
+          throw new Error(msg);
       }
 
       try {
@@ -247,26 +248,21 @@ const AppContent: React.FC = () => {
               console.warn("Storage quota exceeded. Attempting aggressive cleanup...");
               
               try {
-                  // 1. Try to save theme
                   const theme = localStorage.getItem('theme');
-                  
-                  // 2. Clear everything
                   localStorage.clear();
-                  
-                  // 3. Restore theme
                   if (theme) localStorage.setItem('theme', theme);
                   
-                  // 4. Retry login
                   const { error: retryError } = await supabase.auth.signInWithPassword({ email, password });
                   if (retryError) throw retryError;
                   
               } catch (retryE: any) {
-                   // If it fails again, it's likely Private Mode (quota = 0)
-                   console.error("Login retry failed:", retryE);
-                   alert("Не удалось войти. \n\nВозможные причины:\n1. Вы в режиме «Инкогнито» (Private Mode), где память отключена.\n2. Память браузера полностью забита.\n\nПожалуйста, выйдите из инкогнито или очистите кэш браузера вручную.");
+                   const msg = "Не удалось войти из-за ограничений памяти браузера (Инкогнито или диск заполнен).";
+                   alert(msg);
+                   throw new Error(msg);
               }
           } else {
               alert(e.message || "Ошибка входа");
+              throw e; // Important: re-throw for the Login component diagnostics
           }
       }
   };
