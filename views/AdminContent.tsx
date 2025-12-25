@@ -176,9 +176,14 @@ const AdminContent: React.FC<AdminContentProps> = ({
             });
         } else if (activeTab === 'lessons') {
             setEditingItem({
+                title: '',
+                description: '',
                 duration: '15 мин',
                 moduleId: modules[0]?.id || '',
-                videoUrl: ''
+                videoUrl: '',
+                status: 'draft',
+                materials: [],
+                tasks: []
             });
         } else {
             setEditingItem({});
@@ -689,12 +694,149 @@ const AdminContent: React.FC<AdminContentProps> = ({
 
                <div>
                    <label className="block text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-2">Описание урока</label>
-                   <textarea 
-                        rows={4} 
+                   <textarea
+                        rows={4}
                         value={editingItem?.description || ''}
                         onChange={(e) => updateField('description', e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 focus:outline-none focus:border-violet-500" 
+                        className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 focus:outline-none focus:border-violet-500"
                     />
+               </div>
+
+               {/* Materials Section */}
+               <div className="pt-4 border-t border-zinc-200 dark:border-white/10">
+                   <div className="flex items-center justify-between mb-3">
+                       <label className="block text-sm font-bold text-zinc-700 dark:text-zinc-300">Материалы урока</label>
+                       <span className="text-xs text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-lg">{(editingItem?.materials || []).length} материалов</span>
+                   </div>
+
+                   <div className="space-y-3">
+                       {(editingItem?.materials || []).map((material: any, index: number) => (
+                           <div key={material.id || index} className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-white/5 relative group">
+                               <div className="grid grid-cols-2 gap-3 mb-3">
+                                   <input
+                                       type="text"
+                                       placeholder="Название материала"
+                                       value={material.title || ''}
+                                       onChange={(e) => {
+                                           const newMaterials = [...(editingItem.materials || [])];
+                                           newMaterials[index] = { ...material, title: e.target.value };
+                                           updateField('materials', newMaterials);
+                                       }}
+                                       className="px-3 py-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 focus:outline-none focus:border-violet-500 text-sm"
+                                   />
+                                   <select
+                                       value={material.type || 'link'}
+                                       onChange={(e) => {
+                                           const newMaterials = [...(editingItem.materials || [])];
+                                           newMaterials[index] = { ...material, type: e.target.value };
+                                           updateField('materials', newMaterials);
+                                       }}
+                                       className="px-3 py-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 focus:outline-none focus:border-violet-500 text-sm"
+                                   >
+                                       <option value="link">Ссылка</option>
+                                       <option value="pdf">PDF</option>
+                                       <option value="code">Код</option>
+                                       <option value="figma">Figma</option>
+                                   </select>
+                               </div>
+                               <input
+                                   type="text"
+                                   placeholder="URL материала"
+                                   value={material.url || ''}
+                                   onChange={(e) => {
+                                       const newMaterials = [...(editingItem.materials || [])];
+                                       newMaterials[index] = { ...material, url: e.target.value };
+                                       updateField('materials', newMaterials);
+                                   }}
+                                   className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 focus:outline-none focus:border-violet-500 text-sm"
+                               />
+                               <button
+                                   type="button"
+                                   onClick={() => {
+                                       const newMaterials = (editingItem.materials || []).filter((_: any, i: number) => i !== index);
+                                       updateField('materials', newMaterials);
+                                   }}
+                                   className="absolute top-2 right-2 p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-zinc-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                               >
+                                   <Trash2 size={16} />
+                               </button>
+                           </div>
+                       ))}
+
+                       <button
+                           type="button"
+                           onClick={() => {
+                               const newMaterial = {
+                                   id: Date.now().toString(),
+                                   title: '',
+                                   type: 'link',
+                                   url: ''
+                               };
+                               updateField('materials', [...(editingItem.materials || []), newMaterial]);
+                           }}
+                           className="w-full py-3 border-2 border-dashed border-zinc-200 dark:border-white/10 rounded-xl text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-white/20 transition-all flex items-center justify-center gap-2 font-bold text-sm"
+                       >
+                           <Plus size={16} />
+                           Добавить материал
+                       </button>
+                   </div>
+               </div>
+
+               {/* Tasks Section */}
+               <div className="pt-4 border-t border-zinc-200 dark:border-white/10">
+                   <div className="flex items-center justify-between mb-3">
+                       <label className="block text-sm font-bold text-zinc-700 dark:text-zinc-300">Задания урока</label>
+                       <span className="text-xs text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-lg">{(editingItem?.tasks || []).length} заданий</span>
+                   </div>
+
+                   <div className="space-y-3">
+                       {(editingItem?.tasks || []).map((task: any, index: number) => (
+                           <div key={task.id || index} className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-white/5 relative group">
+                               <div className="flex items-start gap-3">
+                                   <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-600 dark:text-zinc-300 shrink-0 mt-1">
+                                       {index + 1}
+                                   </div>
+                                   <textarea
+                                       rows={2}
+                                       placeholder="Текст задания..."
+                                       value={task.text || ''}
+                                       onChange={(e) => {
+                                           const newTasks = [...(editingItem.tasks || [])];
+                                           newTasks[index] = { ...task, text: e.target.value };
+                                           updateField('tasks', newTasks);
+                                       }}
+                                       className="flex-1 px-3 py-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 focus:outline-none focus:border-violet-500 text-sm resize-none"
+                                   />
+                                   <button
+                                       type="button"
+                                       onClick={() => {
+                                           const newTasks = (editingItem.tasks || []).filter((_: any, i: number) => i !== index);
+                                           updateField('tasks', newTasks);
+                                       }}
+                                       className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-zinc-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity mt-1"
+                                   >
+                                       <Trash2 size={16} />
+                                   </button>
+                               </div>
+                           </div>
+                       ))}
+
+                       <button
+                           type="button"
+                           onClick={() => {
+                               const newTask = {
+                                   id: Date.now().toString(),
+                                   text: '',
+                                   completed: false
+                               };
+                               updateField('tasks', [...(editingItem.tasks || []), newTask]);
+                           }}
+                           className="w-full py-3 border-2 border-dashed border-zinc-200 dark:border-white/10 rounded-xl text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-white/20 transition-all flex items-center justify-center gap-2 font-bold text-sm"
+                       >
+                           <Plus size={16} />
+                           Добавить задание
+                       </button>
+                   </div>
                </div>
             </>
          )}
@@ -966,10 +1108,10 @@ const AdminContent: React.FC<AdminContentProps> = ({
             </>
          )}
 
-         {/* Common Status/Order (Available for Lessons, Styles, Prompts) */}
-         {activeTab !== 'glossary' && activeTab !== 'roadmaps' && (
-            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-zinc-100 dark:border-white/5">
-                <Select 
+         {/* Common Status (Available for Lessons, Styles, Prompts) */}
+         {activeTab !== 'glossary' && activeTab !== 'roadmaps' && !editingItem?.isModule && (
+            <div className="pt-4 border-t border-zinc-100 dark:border-white/5">
+                <Select
                     label="Статус"
                     value={editingItem?.status || 'published'}
                     onChange={(e) => updateField('status', e.target.value)}
@@ -978,12 +1120,6 @@ const AdminContent: React.FC<AdminContentProps> = ({
                         { value: "draft", label: "Черновик" },
                         { value: "hidden", label: "Скрыт" }
                     ]}
-                />
-                <Input 
-                    label="Порядок"
-                    type="number"
-                    value={editingItem?.order || 10}
-                    onChange={(e) => updateField('order', parseInt(e.target.value))}
                 />
             </div>
          )}
