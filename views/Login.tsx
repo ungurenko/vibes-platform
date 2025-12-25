@@ -11,30 +11,74 @@ interface LoginProps {
   onResetComplete?: () => void;
 }
 
-const Login: React.FC<LoginProps> = ({ 
-    onLogin, 
-    onNavigateToRegister, 
-    onSimulateResetLink, 
+const Login: React.FC<LoginProps> = ({
+    onLogin,
+    onNavigateToRegister,
+    onSimulateResetLink,
     initialView = 'login',
-    onResetComplete 
+    onResetComplete
 }) => {
   const [view, setView] = useState<'login' | 'forgot' | 'email-sent' | 'reset'>(initialView === 'reset' ? 'reset' : 'login');
-  
+
   // Login State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Forgot Password State
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return;
-    
+
     setIsLoading(true);
     try {
         await onLogin(email, password);
     } catch (err: any) {
         // Error handling is managed by App.tsx (alerts)
+        console.error('Login error:', err);
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return;
+
+    setIsLoading(true);
+    try {
+        // Simulate sending reset email (in production, use Supabase)
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        setView('email-sent');
+    } catch (err) {
+        console.error('Forgot password error:', err);
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
+  const handleResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword || newPassword !== confirmNewPassword) {
+        alert('Пароли не совпадают');
+        return;
+    }
+
+    setIsLoading(true);
+    try {
+        // In production, use Supabase password update
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        alert('Пароль успешно изменён!');
+        if (onResetComplete) onResetComplete();
+        setView('login');
+    } catch (err) {
+        console.error('Reset password error:', err);
     } finally {
         setIsLoading(false);
     }
