@@ -214,6 +214,13 @@ export const resetUserProgressDB = async (userId: string) => {
     if (error) throw error;
 };
 
+export const sendPasswordReset = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/?view=reset-password`,
+    });
+    if (error) throw error;
+};
+
 // --- Storage Helpers ---
 
 export const uploadFile = async (file: File, path: string = 'uploads') => {
