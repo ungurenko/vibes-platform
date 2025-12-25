@@ -209,6 +209,30 @@ const AdminContent: React.FC<AdminContentProps> = ({
         }
     };
 
+    // Handle module creation/editing
+    if (editingItem.isModule && onUpdateModules) {
+        const newModule = {
+            id: editingItem.id || Date.now().toString(),
+            title: editingItem.title,
+            description: editingItem.description,
+            status: editingItem.status || 'available',
+            lessons: editingItem.lessons || []
+        };
+
+        const existingIndex = modules.findIndex(m => m.id === newModule.id);
+        if (existingIndex >= 0) {
+            // Update existing module
+            const updatedModules = [...modules];
+            updatedModules[existingIndex] = { ...updatedModules[existingIndex], ...newModule };
+            onUpdateModules(updatedModules);
+        } else {
+            // Add new module
+            onUpdateModules([...modules, newModule]);
+        }
+        setIsEditorOpen(false);
+        return;
+    }
+
     if (activeTab === 'lessons' && onUpdateModules) {
         const newItem = { ...editingItem };
         const newModules = modules.map(mod => {
@@ -261,6 +285,21 @@ const AdminContent: React.FC<AdminContentProps> = ({
 
   // --- Render Functions ---
 
+  const openModuleEditor = (module: CourseModule | null = null) => {
+    if (!module) {
+        setEditingItem({
+            title: '',
+            description: '',
+            status: 'available',
+            lessons: [],
+            isModule: true
+        });
+    } else {
+        setEditingItem({ ...module, isModule: true });
+    }
+    setIsEditorOpen(true);
+  };
+
   const renderLessonsView = () => {
     // When reordering modules
     const handleReorderModules = (newOrder: CourseModule[]) => {
@@ -270,7 +309,7 @@ const AdminContent: React.FC<AdminContentProps> = ({
     // When reordering lessons inside a module
     const handleReorderLessons = (moduleId: string, newModuleLessons: Lesson[]) => {
         if (onUpdateModules) {
-            const newModules = modules.map(m => 
+            const newModules = modules.map(m =>
                 m.id === moduleId ? { ...m, lessons: newModuleLessons } : m
             );
             onUpdateModules(newModules);
@@ -278,6 +317,16 @@ const AdminContent: React.FC<AdminContentProps> = ({
     };
 
     return (
+      <>
+      <div className="mb-6">
+        <button
+            onClick={() => openModuleEditor()}
+            className="w-full py-4 border-2 border-dashed border-zinc-200 dark:border-white/10 rounded-2xl text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-white/20 transition-all flex items-center justify-center gap-2 font-bold text-sm bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+        >
+            <Plus size={18} />
+            Добавить новый модуль
+        </button>
+      </div>
       <Reorder.Group axis="y" values={modules} onReorder={handleReorderModules} className="space-y-6">
         {modules.map((module) => {
             return (
@@ -297,7 +346,14 @@ const AdminContent: React.FC<AdminContentProps> = ({
                         <span className="text-xs font-medium text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-md border border-zinc-200 dark:border-white/5">
                         {module.lessons.length} уроков
                         </span>
-                        <button 
+                        <button
+                            onClick={() => openModuleEditor(module)}
+                            className="p-1.5 text-zinc-400 hover:text-violet-500 hover:bg-violet-50 dark:hover:bg-violet-500/10 rounded-lg transition-colors"
+                            title="Редактировать модуль"
+                        >
+                            <Edit size={16} />
+                        </button>
+                        <button
                             onClick={() => confirmDelete(module.id, 'modules')}
                             className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
                             title="Удалить модуль"
@@ -353,6 +409,7 @@ const AdminContent: React.FC<AdminContentProps> = ({
             );
         })}
       </Reorder.Group>
+      </>
     );
   };
 
@@ -553,20 +610,56 @@ const AdminContent: React.FC<AdminContentProps> = ({
     // Dynamic form based on activeTab
     return (
       <div className="space-y-6">
+         {/* Module Editor */}
+         {editingItem?.isModule && (
+            <>
+               <Input
+                  label="Название модуля"
+                  placeholder="Введите название модуля..."
+                  value={editingItem?.title || ''}
+                  onChange={(e) => updateField('title', e.target.value)}
+               />
+
+               <div>
+                  <label className="block text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-2">Описание модуля</label>
+                  <textarea
+                     rows={3}
+                     value={editingItem?.description || ''}
+                     onChange={(e) => updateField('description', e.target.value)}
+                     placeholder="Краткое описание модуля..."
+                     className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 focus:outline-none focus:border-violet-500"
+                  />
+               </div>
+
+               <Select
+                  label="Статус модуля"
+                  value={editingItem?.status || 'available'}
+                  onChange={(e) => updateField('status', e.target.value)}
+                  options={[
+                     { value: "available", label: "Доступен" },
+                     { value: "locked", label: "Заблокирован" },
+                     { value: "completed", label: "Завершён" }
+                  ]}
+               />
+            </>
+         )}
+
          {/* Common Name Field */}
-         <Input 
-            label={activeTab === 'glossary' ? 'Термин' : 'Название'}
-            placeholder="Введите название..."
-            value={editingItem?.title || editingItem?.name || editingItem?.term || ''}
-            onChange={(e) => {
-                if (activeTab === 'glossary') updateField('term', e.target.value);
-                else if (activeTab === 'styles') updateField('name', e.target.value);
-                else updateField('title', e.target.value);
-            }}
-         />
+         {!editingItem?.isModule && (
+            <Input
+               label={activeTab === 'glossary' ? 'Термин' : 'Название'}
+               placeholder="Введите название..."
+               value={editingItem?.title || editingItem?.name || editingItem?.term || ''}
+               onChange={(e) => {
+                   if (activeTab === 'glossary') updateField('term', e.target.value);
+                   else if (activeTab === 'styles') updateField('name', e.target.value);
+                   else updateField('title', e.target.value);
+               }}
+            />
+         )}
 
          {/* Specific Fields */}
-         {activeTab === 'lessons' && (
+         {activeTab === 'lessons' && !editingItem?.isModule && (
             <>
                <div className="grid grid-cols-2 gap-4">
                   <Select 
@@ -965,10 +1058,17 @@ const AdminContent: React.FC<AdminContentProps> = ({
        </motion.div>
 
        {/* Edit Panel Drawer */}
-       <Drawer 
-         isOpen={isEditorOpen} 
+       <Drawer
+         isOpen={isEditorOpen}
          onClose={() => setIsEditorOpen(false)}
-         title={`${editingItem?.id ? 'Редактировать' : 'Создать'} ${activeTab === 'lessons' ? 'урок' : 'запись'}`}
+         title={`${editingItem?.id ? 'Редактировать' : 'Создать'} ${
+            editingItem?.isModule ? 'модуль' :
+            activeTab === 'lessons' ? 'урок' :
+            activeTab === 'roadmaps' ? 'карту' :
+            activeTab === 'styles' ? 'стиль' :
+            activeTab === 'prompts' ? 'промпт' :
+            activeTab === 'glossary' ? 'термин' : 'запись'
+         }`}
          footer={
             <>
                 <button 
