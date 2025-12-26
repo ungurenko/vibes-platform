@@ -13,12 +13,13 @@ import AdminContent from './views/AdminContent';
 import AdminCalls from './views/AdminCalls';
 import AdminAssistant from './views/AdminAssistant';
 import AdminSettings from './views/AdminSettings';
-import UserProfile from './views/UserProfile'; 
+import UserProfile from './views/UserProfile';
+import Community from './views/Community';
 import Login from './views/Login';
 import Register from './views/Register';
 import Onboarding from './views/Onboarding';
-import { TabId, InviteLink, Student, CourseModule, PromptItem, Roadmap, StyleCard } from './types';
-import { STUDENTS_DATA, COURSE_MODULES, PROMPTS_DATA, ROADMAPS_DATA, STYLES_DATA } from './data';
+import { TabId, InviteLink, Student, CourseModule, PromptItem, Roadmap, StyleCard, GlossaryTerm, DashboardStage, ShowcaseProject } from './types';
+import { STUDENTS_DATA, COURSE_MODULES, PROMPTS_DATA, ROADMAPS_DATA, STYLES_DATA, GLOSSARY_DATA, DASHBOARD_STAGES, SHOWCASE_DATA } from './data';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SoundProvider } from './SoundContext';
 import { 
@@ -53,6 +54,9 @@ const AppContent: React.FC = () => {
   const [prompts, setPrompts] = useState<PromptItem[]>(PROMPTS_DATA);
   const [roadmaps, setRoadmaps] = useState<Roadmap[]>(ROADMAPS_DATA);
   const [styles, setStyles] = useState<StyleCard[]>(STYLES_DATA);
+  const [glossary, setGlossary] = useState<GlossaryTerm[]>(GLOSSARY_DATA);
+  const [stages, setStages] = useState<DashboardStage[]>(DASHBOARD_STAGES);
+  const [showcase, setShowcase] = useState<ShowcaseProject[]>(SHOWCASE_DATA);
 
   // --- UI State ---
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
@@ -128,17 +132,23 @@ const AppContent: React.FC = () => {
   }, []);
 
   const loadContent = async () => {
-      const [dbModules, dbPrompts, dbRoadmaps, dbStyles] = await Promise.all([
+      const [dbModules, dbPrompts, dbRoadmaps, dbStyles, dbGlossary, dbStages, dbShowcase] = await Promise.all([
           fetchAppContent('modules'),
           fetchAppContent('prompts'),
           fetchAppContent('roadmaps'),
-          fetchAppContent('styles')
+          fetchAppContent('styles'),
+          fetchAppContent('glossary'),
+          fetchAppContent('stages'),
+          fetchAppContent('showcase')
       ]);
 
       if (dbModules) setModules(dbModules);
       if (dbPrompts) setPrompts(dbPrompts);
       if (dbRoadmaps) setRoadmaps(dbRoadmaps);
       if (dbStyles) setStyles(dbStyles);
+      if (dbGlossary) setGlossary(dbGlossary);
+      if (dbStages) setStages(dbStages);
+      if (dbShowcase) setShowcase(dbShowcase);
   };
 
   const loadUserProgress = async (userId: string) => {
@@ -356,23 +366,24 @@ const AppContent: React.FC = () => {
     if (!session) return <Login onLogin={handleLogin} onNavigateToRegister={() => setView('register')} onSimulateResetLink={() => setView('reset-password')} />;
 
     switch (activeTab) {
-      case 'dashboard': return <Home onNavigate={setActiveTab} />;
+      case 'dashboard': return <Home stages={stages} onNavigate={setActiveTab} />;
       case 'lessons': return <Lessons modules={modules} completedLessons={completedLessons} onToggleLesson={handleToggleLesson} />;
       case 'roadmaps': return <Roadmaps roadmaps={roadmaps} />;
       case 'styles': return <StyleLibrary styles={styles} />;
       case 'prompts': return <PromptBase prompts={prompts} />;
-      case 'glossary': return <Glossary onNavigate={setActiveTab} onAskAI={handleAskAI} />;
+      case 'glossary': return <Glossary glossary={glossary} onNavigate={setActiveTab} onAskAI={handleAskAI} />;
       case 'assistant': return <Assistant initialMessage={assistantInitialMessage} onMessageHandled={() => setAssistantInitialMessage(null)} />;
-      case 'profile': return currentUser ? <UserProfile user={currentUser} /> : <Home onNavigate={setActiveTab} />;
+      case 'community': return <Community showcase={showcase} onUpdateShowcase={setShowcase} />;
+      case 'profile': return currentUser ? <UserProfile user={currentUser} /> : <Home stages={stages} onNavigate={setActiveTab} />;
       
       // Admin Views
       case 'admin-students': return <AdminStudents students={students} onUpdateStudent={() => {}} onAddStudent={() => {}} onDeleteStudent={() => {}} />;
-      case 'admin-content': return <AdminContent modules={modules} onUpdateModules={setModules} prompts={prompts} onUpdatePrompts={setPrompts} styles={styles} onUpdateStyles={setStyles} roadmaps={roadmaps} onUpdateRoadmaps={setRoadmaps} />;
+      case 'admin-content': return <AdminContent modules={modules} onUpdateModules={setModules} prompts={prompts} onUpdatePrompts={setPrompts} styles={styles} onUpdateStyles={setStyles} roadmaps={roadmaps} onUpdateRoadmaps={setRoadmaps} glossary={glossary} onUpdateGlossary={setGlossary} stages={stages} onUpdateStages={setStages} showcase={showcase} onUpdateShowcase={setShowcase} />;
       case 'admin-calls': return <AdminCalls />;
       case 'admin-assistant': return <AdminAssistant />;
       case 'admin-settings': return <AdminSettings invites={invites} onGenerateInvites={handleGenerateInvites} onDeleteInvite={handleDeleteInvite} onDeactivateInvite={() => {}} />;
 
-      default: return mode === 'admin' ? <AdminStudents students={students} onUpdateStudent={() => {}} onAddStudent={() => {}} onDeleteStudent={() => {}} /> : <Home onNavigate={setActiveTab} />;
+      default: return mode === 'admin' ? <AdminStudents students={students} onUpdateStudent={() => {}} onAddStudent={() => {}} onDeleteStudent={() => {}} /> : <Home stages={stages} onNavigate={setActiveTab} />;
     }
   };
 

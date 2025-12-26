@@ -1,12 +1,12 @@
 
 import React from 'react';
-import { 
-  LayoutDashboard, 
-  Palette, 
-  Book, 
-  Bot, 
-  X, 
-  Moon, 
+import {
+  LayoutDashboard,
+  Palette,
+  Book,
+  Bot,
+  X,
+  Moon,
   Sun,
   GraduationCap,
   Terminal,
@@ -19,7 +19,8 @@ import {
   ListTodo,
   Volume2,
   VolumeX,
-  Lock
+  Lock,
+  Flame
 } from 'lucide-react';
 import { NavItem, TabId } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -44,6 +45,7 @@ const studentNavItems: NavItem[] = [
   { id: 'prompts', label: 'Промпты', icon: Terminal },
   { id: 'glossary', label: 'Словарик', icon: Book },
   { id: 'assistant', label: 'Ассистент', icon: Bot },
+  { id: 'community', label: 'Сообщество', icon: Flame },
 ];
 
 const adminNavItems: NavItem[] = [

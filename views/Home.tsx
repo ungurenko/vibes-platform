@@ -11,21 +11,22 @@ import {
   Sparkles,
   Target
 } from 'lucide-react';
-import { TabId } from '../types';
+import { TabId, DashboardStage } from '../types';
 import { DASHBOARD_STAGES } from '../data';
 import { motion } from 'framer-motion';
 import { fetchAllCalls } from '../lib/supabase';
 
 interface HomeProps {
+  stages?: DashboardStage[];
   onNavigate: (tab: TabId) => void;
 }
 
-const Home: React.FC<HomeProps> = ({ onNavigate }) => {
+const Home: React.FC<HomeProps> = ({ stages = DASHBOARD_STAGES, onNavigate }) => {
   const [activeStageId, setActiveStageId] = useState<number>(1);
   const [completedTasks, setCompletedTasks] = useState<string[]>(['t1-1', 't1-2']);
   const [upcomingCall, setUpcomingCall] = useState<any>(null);
 
-  const activeStage = DASHBOARD_STAGES.find(s => s.id === activeStageId) || DASHBOARD_STAGES[0];
+  const activeStage = stages.find(s => s.id === activeStageId) || stages[0];
 
   // Load upcoming call
   useEffect(() => {

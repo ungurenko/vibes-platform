@@ -19,11 +19,12 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 interface GlossaryProps {
+  glossary?: GlossaryTerm[];
   onNavigate?: (tab: TabId) => void;
   onAskAI?: (prompt: string) => void;
 }
 
-const Glossary: React.FC<GlossaryProps> = ({ onNavigate, onAskAI }) => {
+const Glossary: React.FC<GlossaryProps> = ({ glossary = GLOSSARY_DATA, onNavigate, onAskAI }) => {
   const { playSound } = useSound();
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<GlossaryCategory>('Все');
@@ -32,17 +33,20 @@ const Glossary: React.FC<GlossaryProps> = ({ onNavigate, onAskAI }) => {
 
   // Set random term on mount
   useEffect(() => {
-    const randomIndex = Math.floor(Math.random() * GLOSSARY_DATA.length);
-    setRandomTerm(GLOSSARY_DATA[randomIndex]);
-  }, []);
+    if (glossary.length > 0) {
+      const randomIndex = Math.floor(Math.random() * glossary.length);
+      setRandomTerm(glossary[randomIndex]);
+    }
+  }, [glossary]);
 
   const refreshRandomTerm = () => {
     playSound('click');
+    if (glossary.length === 0) return;
     let newTerm;
     do {
-       const randomIndex = Math.floor(Math.random() * GLOSSARY_DATA.length);
-       newTerm = GLOSSARY_DATA[randomIndex];
-    } while (newTerm.id === randomTerm?.id);
+       const randomIndex = Math.floor(Math.random() * glossary.length);
+       newTerm = glossary[randomIndex];
+    } while (newTerm.id === randomTerm?.id && glossary.length > 1);
     setRandomTerm(newTerm);
   };
 
@@ -70,14 +74,14 @@ const Glossary: React.FC<GlossaryProps> = ({ onNavigate, onAskAI }) => {
   };
 
   const filteredData = useMemo(() => {
-    return GLOSSARY_DATA.filter((item) => {
-      const matchesSearch = item.term.toLowerCase().includes(search.toLowerCase()) || 
+    return glossary.filter((item) => {
+      const matchesSearch = item.term.toLowerCase().includes(search.toLowerCase()) ||
                             (item.slang && item.slang.toLowerCase().includes(search.toLowerCase())) ||
                             item.definition.toLowerCase().includes(search.toLowerCase());
       const matchesCategory = activeCategory === 'Все' || item.category === activeCategory;
       return matchesSearch && matchesCategory;
     });
-  }, [search, activeCategory]);
+  }, [search, activeCategory, glossary]);
 
   return (
     <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-8 md:py-12 pb-32">

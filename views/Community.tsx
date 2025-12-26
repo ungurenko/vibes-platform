@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Heart, 
   ExternalLink, 
@@ -27,16 +27,26 @@ const CATEGORIES: { id: ProjectCategory | 'Все'; label: string; icon: React.E
   { id: 'Креатив', label: 'Креатив', icon: Palette },
 ];
 
-const Community: React.FC = () => {
+interface CommunityProps {
+  showcase?: ShowcaseProject[];
+  onUpdateShowcase?: (showcase: ShowcaseProject[]) => void;
+}
+
+const Community: React.FC<CommunityProps> = ({ showcase = SHOWCASE_DATA, onUpdateShowcase }) => {
   const [activeCategory, setActiveCategory] = useState<ProjectCategory | 'Все'>('Все');
-  const [projects, setProjects] = useState<ShowcaseProject[]>(SHOWCASE_DATA);
+  const [projects, setProjects] = useState<ShowcaseProject[]>(showcase);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'hot' | 'new'>('hot');
 
+  // Sync with props when showcase changes
+  useEffect(() => {
+    setProjects(showcase);
+  }, [showcase]);
+
   // Toggle Like Logic
   const handleLike = (id: string) => {
-    setProjects(prev => prev.map(p => {
+    const updatedProjects = projects.map(p => {
       if (p.id === id) {
         return {
           ...p,
@@ -45,7 +55,11 @@ const Community: React.FC = () => {
         };
       }
       return p;
-    }));
+    });
+    setProjects(updatedProjects);
+    if (onUpdateShowcase) {
+      onUpdateShowcase(updatedProjects);
+    }
   };
 
   // Add Project Logic (Mock)

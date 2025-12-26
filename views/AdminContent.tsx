@@ -26,8 +26,8 @@ import {
   CloudUpload
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
-import { COURSE_MODULES, STYLES_DATA, PROMPTS_DATA, GLOSSARY_DATA, ROADMAPS_DATA } from '../data';
-import { Lesson, StyleCard, PromptItem, GlossaryTerm, CourseModule, Roadmap, RoadmapStep } from '../types';
+import { COURSE_MODULES, STYLES_DATA, PROMPTS_DATA, GLOSSARY_DATA, ROADMAPS_DATA, DASHBOARD_STAGES, SHOWCASE_DATA } from '../data';
+import { Lesson, StyleCard, PromptItem, GlossaryTerm, CourseModule, Roadmap, RoadmapStep, DashboardStage, ShowcaseProject } from '../types';
 import { Drawer, PageHeader, Input, Select, ConfirmModal, FileUploader } from '../components/Shared';
 import { updateAppContent } from '../lib/supabase';
 
@@ -84,6 +84,12 @@ interface AdminContentProps {
     onUpdateRoadmaps?: (roadmaps: Roadmap[]) => void;
     styles?: StyleCard[];
     onUpdateStyles?: (styles: StyleCard[]) => void;
+    glossary?: GlossaryTerm[];
+    onUpdateGlossary?: (glossary: GlossaryTerm[]) => void;
+    stages?: DashboardStage[];
+    onUpdateStages?: (stages: DashboardStage[]) => void;
+    showcase?: ShowcaseProject[];
+    onUpdateShowcase?: (showcase: ShowcaseProject[]) => void;
 }
 
 const AdminContent: React.FC<AdminContentProps> = ({
@@ -94,7 +100,13 @@ const AdminContent: React.FC<AdminContentProps> = ({
     roadmaps = ROADMAPS_DATA,
     onUpdateRoadmaps,
     styles = STYLES_DATA,
-    onUpdateStyles
+    onUpdateStyles,
+    glossary = GLOSSARY_DATA,
+    onUpdateGlossary,
+    stages = DASHBOARD_STAGES,
+    onUpdateStages,
+    showcase = SHOWCASE_DATA,
+    onUpdateShowcase
 }) => {
   // Enrich with admin fields for display
   const adminStyles = enrichStyles(styles);
@@ -104,13 +116,10 @@ const AdminContent: React.FC<AdminContentProps> = ({
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  
+
   // Delete State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ id: string; type: ContentTab | 'modules' } | null>(null);
-
-  // Data State
-  const [glossary, setGlossary] = useState<GlossaryTerm[]>(GLOSSARY_DATA);
 
   // Category Management State
   const [customCategory, setCustomCategory] = useState<string>('');
@@ -140,14 +149,17 @@ const AdminContent: React.FC<AdminContentProps> = ({
 
   const saveToCloud = async () => {
       if (!confirm('Вы уверены, что хотите сохранить все изменения в облако? Это обновит контент для всех студентов.')) return;
-      
+
       setIsSaving(true);
       try {
           await Promise.all([
               updateAppContent('modules', modules),
               updateAppContent('prompts', prompts),
               updateAppContent('roadmaps', roadmaps),
-              updateAppContent('styles', styles)
+              updateAppContent('styles', styles),
+              updateAppContent('glossary', glossary),
+              updateAppContent('stages', stages),
+              updateAppContent('showcase', showcase)
           ]);
           alert('Контент успешно сохранен в базе данных!');
       } catch (error) {
@@ -179,7 +191,7 @@ const AdminContent: React.FC<AdminContentProps> = ({
     }
     if (type === 'styles' && onUpdateStyles) onUpdateStyles(styles.filter(i => i.id !== id));
     if (type === 'prompts' && onUpdatePrompts) onUpdatePrompts(prompts.filter(i => i.id !== id));
-    if (type === 'glossary') setGlossary(prev => prev.filter(i => i.id !== id));
+    if (type === 'glossary' && onUpdateGlossary) onUpdateGlossary(glossary.filter(i => i.id !== id));
     if (type === 'roadmaps' && onUpdateRoadmaps) onUpdateRoadmaps(roadmaps.filter(i => i.id !== id));
 
     setIsDeleteModalOpen(false);
@@ -298,8 +310,8 @@ const AdminContent: React.FC<AdminContentProps> = ({
         onUpdatePrompts(updateList(prompts, editingItem));
     } else if (activeTab === 'roadmaps' && onUpdateRoadmaps) {
         onUpdateRoadmaps(updateList(roadmaps, editingItem));
-    } else if (activeTab === 'glossary') {
-        setGlossary(prev => updateList(prev, editingItem));
+    } else if (activeTab === 'glossary' && onUpdateGlossary) {
+        onUpdateGlossary(updateList(glossary, editingItem));
     }
 
     setIsEditorOpen(false);
