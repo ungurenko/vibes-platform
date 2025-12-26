@@ -1,16 +1,16 @@
 
 import React, { useState } from 'react';
-import { 
-  Palette, 
-  Terminal, 
-  Book, 
-  GraduationCap, 
-  Edit, 
-  Plus, 
-  Trash2, 
-  Image as ImageIcon, 
-  Video, 
-  Upload, 
+import {
+  Palette,
+  Terminal,
+  Book,
+  GraduationCap,
+  Edit,
+  Plus,
+  Trash2,
+  Image as ImageIcon,
+  Video,
+  Upload,
   Save,
   Copy,
   GripVertical,
@@ -23,7 +23,8 @@ import {
   ChevronUp,
   ChevronDown,
   Link as LinkIcon,
-  CloudUpload
+  CloudUpload,
+  Target
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { COURSE_MODULES, STYLES_DATA, PROMPTS_DATA, GLOSSARY_DATA, ROADMAPS_DATA, DASHBOARD_STAGES, SHOWCASE_DATA } from '../data';
@@ -33,7 +34,7 @@ import { updateAppContent } from '../lib/supabase';
 
 // --- Types & Config ---
 
-type ContentTab = 'lessons' | 'styles' | 'prompts' | 'glossary' | 'roadmaps';
+type ContentTab = 'lessons' | 'styles' | 'prompts' | 'glossary' | 'roadmaps' | 'stages';
 
 // Extended Interfaces for Admin State (mocking DB fields)
 interface AdminLesson extends Lesson {
@@ -193,6 +194,7 @@ const AdminContent: React.FC<AdminContentProps> = ({
     if (type === 'prompts' && onUpdatePrompts) onUpdatePrompts(prompts.filter(i => i.id !== id));
     if (type === 'glossary' && onUpdateGlossary) onUpdateGlossary(glossary.filter(i => i.id !== id));
     if (type === 'roadmaps' && onUpdateRoadmaps) onUpdateRoadmaps(roadmaps.filter(i => i.id !== id));
+    if (type === 'stages' && onUpdateStages) onUpdateStages(stages.filter(s => s.id.toString() !== id));
 
     setIsDeleteModalOpen(false);
     setItemToDelete(null);
@@ -223,6 +225,14 @@ const AdminContent: React.FC<AdminContentProps> = ({
                 videoUrl: '',
                 status: 'draft',
                 materials: [],
+                tasks: []
+            });
+        } else if (activeTab === 'stages') {
+            setEditingItem({
+                id: Date.now(),
+                title: '',
+                subtitle: '',
+                status: 'locked',
                 tasks: []
             });
         } else {
@@ -312,6 +322,17 @@ const AdminContent: React.FC<AdminContentProps> = ({
         onUpdateRoadmaps(updateList(roadmaps, editingItem));
     } else if (activeTab === 'glossary' && onUpdateGlossary) {
         onUpdateGlossary(updateList(glossary, editingItem));
+    } else if (activeTab === 'stages' && onUpdateStages) {
+        // For stages, we use numeric id
+        const stageItem = { ...editingItem, id: editingItem.id || Date.now() };
+        const index = stages.findIndex(s => s.id === stageItem.id);
+        if (index >= 0) {
+            const newStages = [...stages];
+            newStages[index] = stageItem;
+            onUpdateStages(newStages);
+        } else {
+            onUpdateStages([...stages, stageItem]);
+        }
     }
 
     setIsEditorOpen(false);
@@ -627,7 +648,7 @@ const AdminContent: React.FC<AdminContentProps> = ({
                             </button>
                         </div>
                     </div>
-                    
+
                     <div className="mb-4">
                         <div className="flex items-center gap-2 mb-2">
                             <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-white/10 text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
@@ -643,6 +664,76 @@ const AdminContent: React.FC<AdminContentProps> = ({
                         <div className="flex items-center gap-3">
                             <span className="flex items-center gap-1"><ListOrdered size={14} /> {map.steps.length} шагов</span>
                             <span className="flex items-center gap-1"><Clock size={14} /> {map.estimatedTime}</span>
+                        </div>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+  };
+
+  const renderStagesView = () => {
+    return (
+        <div className="space-y-4">
+            {stages.map((stage, index) => (
+                <div key={stage.id} className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-white/5 p-6 hover:border-violet-300 dark:hover:border-violet-500/30 transition-all shadow-sm group">
+                    <div className="flex items-start gap-4">
+                        {/* Stage Number */}
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-bold shrink-0 ${
+                            stage.status === 'completed' ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600' :
+                            stage.status === 'current' ? 'bg-violet-100 dark:bg-violet-500/10 text-violet-600' :
+                            'bg-zinc-100 dark:bg-zinc-800 text-zinc-400'
+                        }`}>
+                            {index + 1}
+                        </div>
+
+                        {/* Stage Info */}
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                                <h3 className="font-bold text-lg text-zinc-900 dark:text-white">{stage.title}</h3>
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                    stage.status === 'completed' ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600' :
+                                    stage.status === 'current' ? 'bg-violet-100 dark:bg-violet-500/10 text-violet-600' :
+                                    'bg-zinc-100 dark:bg-zinc-800 text-zinc-400'
+                                }`}>
+                                    {stage.status === 'completed' ? 'Завершён' : stage.status === 'current' ? 'Текущий' : 'Закрыт'}
+                                </span>
+                            </div>
+                            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-3">{stage.subtitle}</p>
+
+                            {/* Tasks Preview */}
+                            <div className="flex flex-wrap gap-2">
+                                {stage.tasks.slice(0, 4).map(task => (
+                                    <span key={task.id} className={`text-xs px-2 py-1 rounded-lg border ${
+                                        task.completed
+                                            ? 'bg-emerald-50 dark:bg-emerald-500/5 border-emerald-200 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400 line-through'
+                                            : 'bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-white/5 text-zinc-600 dark:text-zinc-400'
+                                    }`}>
+                                        {task.title}
+                                    </span>
+                                ))}
+                                {stage.tasks.length > 4 && (
+                                    <span className="text-xs px-2 py-1 text-zinc-400">
+                                        +{stage.tasks.length - 4} ещё
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                                onClick={() => openEditor(stage)}
+                                className="p-2 rounded-lg text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/10 hover:text-zinc-900 dark:hover:text-white"
+                            >
+                                <Edit size={16} />
+                            </button>
+                            <button
+                                onClick={() => confirmDelete(stage.id.toString(), 'stages')}
+                                className="p-2 rounded-lg text-zinc-400 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-500"
+                            >
+                                <Trash2 size={16} />
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1330,12 +1421,12 @@ const AdminContent: React.FC<AdminContentProps> = ({
                        ))}
 
                        {/* Add Button */}
-                       <button 
+                       <button
                            type="button"
                            onClick={() => {
-                               const newStep = { 
-                                   id: Date.now().toString(), 
-                                   title: '', 
+                               const newStep = {
+                                   id: Date.now().toString(),
+                                   title: '',
                                    description: '',
                                    linkUrl: '',
                                    linkText: ''
@@ -1352,8 +1443,148 @@ const AdminContent: React.FC<AdminContentProps> = ({
             </>
          )}
 
+         {activeTab === 'stages' && (
+            <>
+               <Input
+                  label="Название этапа"
+                  placeholder="Например: Основы веб-разработки"
+                  value={editingItem?.title || ''}
+                  onChange={(e) => updateField('title', e.target.value)}
+               />
+
+               <div>
+                  <label className="block text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-2">Подзаголовок</label>
+                  <textarea
+                     rows={2}
+                     value={editingItem?.subtitle || ''}
+                     onChange={(e) => updateField('subtitle', e.target.value)}
+                     placeholder="Краткое описание этапа..."
+                     className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 focus:outline-none focus:border-violet-500"
+                  />
+               </div>
+
+               <Select
+                  label="Статус этапа"
+                  value={editingItem?.status || 'locked'}
+                  onChange={(e) => updateField('status', e.target.value)}
+                  options={[
+                     { value: "locked", label: "Закрыт" },
+                     { value: "current", label: "Текущий" },
+                     { value: "completed", label: "Завершён" }
+                  ]}
+               />
+
+               {/* Stage Tasks Editor */}
+               <div className="pt-4 border-t border-zinc-200 dark:border-white/10">
+                   <div className="flex items-center justify-between mb-3">
+                       <label className="block text-sm font-bold text-zinc-700 dark:text-zinc-300">Задачи этапа</label>
+                       <span className="text-xs text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-lg">{(editingItem?.tasks || []).length} задач</span>
+                   </div>
+
+                   <div className="space-y-3">
+                       {(editingItem?.tasks || []).map((task: any, index: number) => (
+                           <div key={task.id || index} className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-white/5 relative group">
+                               <div className="flex items-center gap-3">
+                                   {/* Checkbox for completed */}
+                                   <button
+                                       type="button"
+                                       onClick={() => {
+                                           const newTasks = [...(editingItem.tasks || [])];
+                                           newTasks[index] = { ...task, completed: !task.completed };
+                                           updateField('tasks', newTasks);
+                                       }}
+                                       className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors shrink-0 ${
+                                           task.completed
+                                               ? 'bg-emerald-500 border-emerald-500 text-white'
+                                               : 'border-zinc-300 dark:border-zinc-600 hover:border-emerald-400'
+                                       }`}
+                                   >
+                                       {task.completed && <CheckCircle2 size={12} />}
+                                   </button>
+
+                                   {/* Task title input */}
+                                   <input
+                                       type="text"
+                                       placeholder="Название задачи..."
+                                       value={task.title || ''}
+                                       onChange={(e) => {
+                                           const newTasks = [...(editingItem.tasks || [])];
+                                           newTasks[index] = { ...task, title: e.target.value };
+                                           updateField('tasks', newTasks);
+                                       }}
+                                       className={`flex-1 bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-violet-500 focus:outline-none px-2 py-1 font-medium transition-colors ${
+                                           task.completed ? 'line-through text-zinc-400' : ''
+                                       }`}
+                                   />
+
+                                   {/* Move up/down */}
+                                   <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                                       <button
+                                           type="button"
+                                           onClick={() => {
+                                               if (index > 0) {
+                                                   const newTasks = [...(editingItem.tasks || [])];
+                                                   [newTasks[index], newTasks[index - 1]] = [newTasks[index - 1], newTasks[index]];
+                                                   updateField('tasks', newTasks);
+                                               }
+                                           }}
+                                           className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded text-zinc-500 disabled:opacity-30"
+                                           disabled={index === 0}
+                                       >
+                                           <ChevronUp size={16} />
+                                       </button>
+                                       <button
+                                           type="button"
+                                           onClick={() => {
+                                               if (index < (editingItem.tasks || []).length - 1) {
+                                                   const newTasks = [...(editingItem.tasks || [])];
+                                                   [newTasks[index], newTasks[index + 1]] = [newTasks[index + 1], newTasks[index]];
+                                                   updateField('tasks', newTasks);
+                                               }
+                                           }}
+                                           className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded text-zinc-500 disabled:opacity-30"
+                                           disabled={index === (editingItem.tasks || []).length - 1}
+                                       >
+                                           <ChevronDown size={16} />
+                                       </button>
+                                       <button
+                                           type="button"
+                                           onClick={() => {
+                                               const newTasks = (editingItem.tasks || []).filter((_: any, i: number) => i !== index);
+                                               updateField('tasks', newTasks);
+                                           }}
+                                           className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-zinc-400 hover:text-red-500 ml-1"
+                                       >
+                                           <Trash2 size={16} />
+                                       </button>
+                                   </div>
+                               </div>
+                           </div>
+                       ))}
+
+                       {/* Add Task Button */}
+                       <button
+                           type="button"
+                           onClick={() => {
+                               const newTask = {
+                                   id: 't' + Date.now().toString(),
+                                   title: '',
+                                   completed: false
+                               };
+                               updateField('tasks', [...(editingItem.tasks || []), newTask]);
+                           }}
+                           className="w-full py-3 border-2 border-dashed border-zinc-200 dark:border-white/10 rounded-xl text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-white/20 transition-all flex items-center justify-center gap-2 font-bold text-sm"
+                       >
+                           <Plus size={16} />
+                           Добавить задачу
+                       </button>
+                   </div>
+               </div>
+            </>
+         )}
+
          {/* Common Status (Available for Lessons, Styles, Prompts) */}
-         {activeTab !== 'glossary' && activeTab !== 'roadmaps' && !editingItem?.isModule && (
+         {activeTab !== 'glossary' && activeTab !== 'roadmaps' && activeTab !== 'stages' && !editingItem?.isModule && (
             <div className="pt-4 border-t border-zinc-100 dark:border-white/5">
                 <Select
                     label="Статус"
@@ -1392,7 +1623,7 @@ const AdminContent: React.FC<AdminContentProps> = ({
                 className="px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-xl font-bold hover:scale-105 active:scale-95 transition-all flex items-center gap-2 shadow-lg shadow-zinc-500/10"
                >
                 <Plus size={18} />
-                <span>Добавить {activeTab === 'lessons' ? 'урок' : activeTab === 'styles' ? 'стиль' : activeTab === 'prompts' ? 'промпт' : activeTab === 'roadmaps' ? 'карту' : 'термин'}</span>
+                <span>Добавить {activeTab === 'lessons' ? 'урок' : activeTab === 'styles' ? 'стиль' : activeTab === 'prompts' ? 'промпт' : activeTab === 'roadmaps' ? 'карту' : activeTab === 'stages' ? 'этап' : 'термин'}</span>
                </button>
             </div>
          }
@@ -1403,6 +1634,7 @@ const AdminContent: React.FC<AdminContentProps> = ({
           {[
              { id: 'lessons', label: 'Уроки', icon: GraduationCap },
              { id: 'roadmaps', label: 'Карты', icon: Map },
+             { id: 'stages', label: 'Этапы', icon: Target },
              { id: 'styles', label: 'Стили', icon: Palette },
              { id: 'prompts', label: 'Промпты', icon: Terminal },
              { id: 'glossary', label: 'Словарь', icon: Book },
@@ -1435,6 +1667,7 @@ const AdminContent: React.FC<AdminContentProps> = ({
           {activeTab === 'prompts' && renderPromptsView()}
           {activeTab === 'glossary' && renderGlossaryView()}
           {activeTab === 'roadmaps' && renderRoadmapsView()}
+          {activeTab === 'stages' && renderStagesView()}
        </motion.div>
 
        {/* Edit Panel Drawer */}
@@ -1445,6 +1678,7 @@ const AdminContent: React.FC<AdminContentProps> = ({
             editingItem?.isModule ? 'модуль' :
             activeTab === 'lessons' ? 'урок' :
             activeTab === 'roadmaps' ? 'карту' :
+            activeTab === 'stages' ? 'этап' :
             activeTab === 'styles' ? 'стиль' :
             activeTab === 'prompts' ? 'промпт' :
             activeTab === 'glossary' ? 'термин' : 'запись'
