@@ -412,3 +412,38 @@ export const deleteCall = async (id: string) => {
 
     if (error) throw error;
 };
+
+// --- Dashboard Tasks Management ---
+
+export const fetchUserTasks = async (userId: string) => {
+    const { data, error } = await supabase
+        .from('user_progress')
+        .select('lesson_id')
+        .eq('user_id', userId)
+        .like('lesson_id', 'task:%');
+
+    if (error) {
+        console.error('Error fetching tasks:', error);
+        return [];
+    }
+    // Remove "task:" prefix and return task IDs
+    return data.map(p => p.lesson_id.replace('task:', ''));
+};
+
+export const toggleTaskComplete = async (userId: string, taskId: string, isComplete: boolean) => {
+    const prefixedTaskId = `task:${taskId}`;
+
+    if (isComplete) {
+        const { error } = await supabase
+            .from('user_progress')
+            .insert([{ user_id: userId, lesson_id: prefixedTaskId }]);
+        if (error && error.code !== '23505') throw error; // Ignore duplicate error
+    } else {
+        const { error } = await supabase
+            .from('user_progress')
+            .delete()
+            .eq('user_id', userId)
+            .eq('lesson_id', prefixedTaskId);
+        if (error) throw error;
+    }
+};
