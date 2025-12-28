@@ -1,5 +1,5 @@
 
-import { GlossaryTerm, StyleCard, CourseModule, PromptItem, DashboardStage, Student, AdminStat, ActivityLogItem, ChatMessage, Roadmap, ShowcaseProject } from './types';
+import { GlossaryTerm, StyleCard, CourseModule, PromptItem, DashboardStage, Student, AdminStat, ActivityLogItem, ChatMessage, Roadmap } from './types';
 
 export const DEFAULT_AI_SYSTEM_INSTRUCTION = `Ты — ассистент курса VIBES по вайб-кодингу.
 Твоя миссия — помогать ученикам (часто новичкам без опыта) создавать веб-сайты с помощью нейросетей.
@@ -785,71 +785,4 @@ export const STUDENT_CHAT_HISTORY: ChatMessage[] = [
 export const ADMIN_STATS: AdminStat[] = [
   { label: 'Активные студенты', value: '1,248', change: '+12%', isPositive: true },
   { label: 'Средний прогресс', value: '42%', change: '+5%', isPositive: true },
-];
-
-export const SHOWCASE_DATA: ShowcaseProject[] = [
-  {
-    id: '1',
-    title: 'Лендинг для кофейни',
-    description: 'Уютный дизайн в теплых тонах с использованием параллакс-эффекта и кастомных иконок.',
-    imageUrl: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?q=80&w=1000&auto=format&fit=crop',
-    demoUrl: '#',
-    category: 'Лендинг',
-    author: {
-      name: 'Мария Д.',
-      avatar: 'https://i.pravatar.cc/150?u=2',
-      level: 'Студент'
-    },
-    likes: 42,
-    isLikedByCurrentUser: true,
-    date: '2023-10-25'
-  },
-  {
-    id: '2',
-    title: 'SaaS Dashboard',
-    description: 'Админ-панель для управления проектами. Темная тема, графики на Recharts.',
-    imageUrl: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=1000&auto=format&fit=crop',
-    demoUrl: '#',
-    category: 'Веб-сервис',
-    author: {
-      name: 'Алекс К.',
-      avatar: 'https://i.pravatar.cc/150?u=1',
-      level: 'Pro'
-    },
-    likes: 128,
-    isLikedByCurrentUser: false,
-    date: '2023-10-24'
-  },
-  {
-    id: '3',
-    title: 'Магазин кроссовок',
-    description: 'E-commerce проект с корзиной, фильтрами и 3D-просмотром товаров.',
-    imageUrl: 'https://images.unsplash.com/photo-1556906781-9a412961d289?q=80&w=1000&auto=format&fit=crop',
-    demoUrl: '#',
-    category: 'E-commerce',
-    author: {
-      name: 'Дмитрий В.',
-      avatar: 'https://i.pravatar.cc/150?u=8',
-      level: 'Студент'
-    },
-    likes: 85,
-    isLikedByCurrentUser: false,
-    date: '2023-10-20'
-  },
-  {
-    id: '4',
-    title: 'Портфолио 3D',
-    description: 'Креативное портфолио с использованием Three.js и интерактивных частиц.',
-    imageUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop',
-    demoUrl: '#',
-    category: 'Креатив',
-    author: {
-      name: 'Елена С.',
-      avatar: 'https://i.pravatar.cc/150?u=12',
-      level: 'Ментор'
-    },
-    likes: 256,
-    isLikedByCurrentUser: true,
-    date: '2023-10-15'
-  }
 ];

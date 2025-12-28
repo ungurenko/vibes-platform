@@ -45,7 +45,6 @@ const studentNavItems: NavItem[] = [
   { id: 'prompts', label: 'Промпты', icon: Terminal },
   { id: 'glossary', label: 'Словарик', icon: Book },
   { id: 'assistant', label: 'Ассистент', icon: Bot },
-  { id: 'community', label: 'Сообщество', icon: Flame },
 ];
 
 const adminNavItems: NavItem[] = [
