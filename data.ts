@@ -1,5 +1,17 @@
 
-import { GlossaryTerm, StyleCard, CourseModule, PromptItem, DashboardStage, Student, AdminStat, ActivityLogItem, ChatMessage, Roadmap, ShowcaseProject } from './types';
+import { GlossaryTerm, StyleCard, CourseModule, PromptItem, PromptCategoryItem, DashboardStage, Student, AdminStat, ActivityLogItem, ChatMessage, Roadmap, ShowcaseProject } from './types';
+
+// Default prompt categories
+export const PROMPT_CATEGORIES_DATA: PromptCategoryItem[] = [
+  { id: 'cat1', name: 'Проектирование', icon: '📋', color: 'indigo', order: 1 },
+  { id: 'cat2', name: 'Создание лендинга', icon: '🎨', color: 'violet', order: 2 },
+  { id: 'cat3', name: 'Создание веб-сервиса', icon: '⚡', color: 'blue', order: 3 },
+  { id: 'cat4', name: 'Улучшение дизайна', icon: '✨', color: 'pink', order: 4 },
+  { id: 'cat5', name: 'Исправление ошибок', icon: '🔧', color: 'red', order: 5 },
+  { id: 'cat6', name: 'Добавление функций', icon: '🚀', color: 'emerald', order: 6 },
+  { id: 'cat7', name: 'Работа с API', icon: '🔌', color: 'amber', order: 7 },
+  { id: 'cat8', name: 'Оптимизация кода', icon: '⚙️', color: 'cyan', order: 8 },
+];
 
 export const DEFAULT_AI_SYSTEM_INSTRUCTION = `Ты — ассистент курса VIBES по вайб-кодингу.
 Твоя миссия — помогать ученикам (часто новичкам без опыта) создавать веб-сайты с помощью нейросетей.
