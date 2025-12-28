@@ -122,34 +122,21 @@ const PromptBase: React.FC<PromptBaseProps> = ({
                 />
             </div>
 
-            <div className="flex flex-wrap gap-2">
-                {['Все', ...sortedCategories].map((cat) => {
-                const count = cat === 'Все'
-                    ? prompts.length
-                    : prompts.filter(p => p.category === cat).length;
-
-                return (
+            <div className="flex overflow-x-auto scrollbar-none gap-2 pb-2">
+                {['Все', ...sortedCategories].map((cat) => (
                 <button
                     key={cat}
                     onClick={() => { playSound('click'); setActiveCategory(cat as any); }}
-                    className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all border flex items-center gap-2 ${
+                    className={`px-4 py-2.5 rounded-full text-sm font-bold transition-all border whitespace-nowrap flex items-center gap-2 ${
                     activeCategory === cat
-                        ? 'bg-zinc-900 dark:bg-white text-white dark:text-black border-transparent shadow-lg shadow-zinc-900/20 dark:shadow-white/20 scale-[1.02]'
-                        : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-white/5 hover:border-zinc-300 dark:hover:border-white/20'
+                        ? 'bg-zinc-900 dark:bg-white text-white dark:text-black border-transparent shadow-md'
+                        : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-white/5'
                     }`}
                 >
-                    {cat !== 'Все' && <span className="text-base">{categoryIcons[cat]}</span>}
+                    {cat !== 'Все' && <span>{categoryIcons[cat]}</span>}
                     <span>{cat}</span>
-                    <span className={`text-xs px-1.5 py-0.5 rounded-md ${
-                        activeCategory === cat
-                        ? 'bg-white/20 dark:bg-black/20'
-                        : 'bg-zinc-100 dark:bg-white/10 text-zinc-400 dark:text-zinc-500'
-                    }`}>
-                        {count}
-                    </span>
                 </button>
-                );
-                })}
+                ))}
             </div>
         </div>
 
