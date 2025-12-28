@@ -412,3 +412,431 @@ export const deleteCall = async (id: string) => {
 
     if (error) throw error;
 };
+
+// --- Dashboard Tasks Management ---
+
+export const fetchUserTasks = async (userId: string) => {
+    const { data, error } = await supabase
+        .from('user_progress')
+        .select('lesson_id')
+        .eq('user_id', userId)
+        .like('lesson_id', 'task:%');
+
+    if (error) {
+        console.error('Error fetching tasks:', error);
+        return [];
+    }
+    // Remove "task:" prefix and return task IDs
+    return data.map(p => p.lesson_id.replace('task:', ''));
+};
+
+export const toggleTaskComplete = async (userId: string, taskId: string, isComplete: boolean) => {
+    const prefixedTaskId = `task:${taskId}`;
+
+    if (isComplete) {
+        const { error } = await supabase
+            .from('user_progress')
+            .insert([{ user_id: userId, lesson_id: prefixedTaskId }]);
+        if (error && error.code !== '23505') throw error; // Ignore duplicate error
+    } else {
+        const { error} = await supabase
+            .from('user_progress')
+            .delete()
+            .eq('user_id', userId)
+            .eq('lesson_id', prefixedTaskId);
+        if (error) throw error;
+    }
+};
+
+// --- Dashboard Tasks Management (NEW - with database tables) ---
+
+export const fetchAllDashboardTasks = async (weekNumber?: number) => {
+    let query = supabase
+        .from('dashboard_tasks')
+        .select('*')
+        .order('order', { ascending: true });
+
+    if (weekNumber) {
+        query = query.eq('week_number', weekNumber);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+    return data || [];
+};
+
+export const createDashboardTask = async (taskData: {
+    week_number: number;
+    title: string;
+    link?: string;
+    order?: number;
+}) => {
+    const { data, error } = await supabase
+        .from('dashboard_tasks')
+        .insert([taskData])
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+};
+
+export const updateDashboardTask = async (id: string, taskData: {
+    week_number?: number;
+    title?: string;
+    link?: string;
+    order?: number;
+}) => {
+    const { data, error } = await supabase
+        .from('dashboard_tasks')
+        .update(taskData)
+        .eq('id', id)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+};
+
+export const deleteDashboardTask = async (id: string) => {
+    const { error } = await supabase
+        .from('dashboard_tasks')
+        .delete()
+        .eq('id', id);
+
+    if (error) throw error;
+};
+
+export const reorderDashboardTasks = async (tasks: { id: string; order: number }[]) => {
+    const updates = tasks.map(task =>
+        supabase
+            .from('dashboard_tasks')
+            .update({ order: task.order })
+            .eq('id', task.id)
+    );
+
+    await Promise.all(updates);
+};
+
+// --- User Dashboard Tasks Progress ---
+
+export const fetchUserDashboardProgress = async (userId: string, weekNumber?: number) => {
+    let query = supabase
+        .from('user_dashboard_tasks')
+        .select(`
+            *,
+            task:dashboard_tasks(*)
+        `)
+        .eq('user_id', userId);
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    // Filter by week if specified
+    if (weekNumber && data) {
+        return data.filter((item: any) => item.task?.week_number === weekNumber);
+    }
+
+    return data || [];
+};
+
+export const toggleDashboardTaskComplete = async (
+    userId: string,
+    taskId: string,
+    isComplete: boolean
+) => {
+    if (isComplete) {
+        // Mark as complete
+        const { error } = await supabase
+            .from('user_dashboard_tasks')
+            .upsert([
+                {
+                    user_id: userId,
+                    task_id: taskId,
+                    completed: true,
+                    completed_at: new Date().toISOString()
+                }
+            ], {
+                onConflict: 'user_id,task_id'
+            });
+
+        if (error) throw error;
+    } else {
+        // Mark as incomplete
+        const { error } = await supabase
+            .from('user_dashboard_tasks')
+            .upsert([
+                {
+                    user_id: userId,
+                    task_id: taskId,
+                    completed: false,
+                    completed_at: null
+                }
+            ], {
+                onConflict: 'user_id,task_id'
+            });
+
+        if (error) throw error;
+    }
+};
+
+export const getTaskStats = async () => {
+    // Get all users and their task progress
+    const { data: users, error: usersError } = await supabase
+        .from('profiles')
+        .select('id, full_name, email');
+
+    if (usersError) throw usersError;
+
+    const { data: allProgress, error: progressError } = await supabase
+        .from('user_dashboard_tasks')
+        .select('user_id, completed');
+
+    if (progressError) throw progressError;
+
+    // Calculate stats per user
+    const stats = users?.map(user => {
+        const userProgress = allProgress?.filter(p => p.user_id === user.id) || [];
+        const completedCount = userProgress.filter(p => p.completed).length;
+
+        return {
+            userId: user.id,
+            name: user.full_name,
+            email: user.email,
+            completedTasks: completedCount,
+            totalTasks: userProgress.length
+        };
+    });
+
+    return stats || [];
+};
+
+// --- Dashboard Quick Links Management ---
+
+export const fetchAllQuickLinks = async (activeOnly = false) => {
+    let query = supabase
+        .from('dashboard_quick_links')
+        .select('*')
+        .order('order', { ascending: true });
+
+    if (activeOnly) {
+        query = query.eq('is_active', true);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+    return data || [];
+};
+
+export const createQuickLink = async (linkData: {
+    title: string;
+    icon: string;
+    url: string;
+    order?: number;
+    is_active?: boolean;
+}) => {
+    const { data, error } = await supabase
+        .from('dashboard_quick_links')
+        .insert([linkData])
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+};
+
+export const updateQuickLink = async (id: string, linkData: {
+    title?: string;
+    icon?: string;
+    url?: string;
+    order?: number;
+    is_active?: boolean;
+}) => {
+    const { data, error } = await supabase
+        .from('dashboard_quick_links')
+        .update(linkData)
+        .eq('id', id)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+};
+
+export const deleteQuickLink = async (id: string) => {
+    const { error } = await supabase
+        .from('dashboard_quick_links')
+        .delete()
+        .eq('id', id);
+
+    if (error) throw error;
+};
+
+export const reorderQuickLinks = async (links: { id: string; order: number }[]) => {
+    const updates = links.map(link =>
+        supabase
+            .from('dashboard_quick_links')
+            .update({ order: link.order })
+            .eq('id', link.id)
+    );
+
+    await Promise.all(updates);
+};
+
+// --- Dashboard Settings Management ---
+
+export const fetchDashboardSettings = async () => {
+    const { data, error } = await supabase
+        .from('dashboard_settings')
+        .select('*')
+        .limit(1)
+        .single();
+
+    if (error && error.code !== 'PGRST116') throw error;
+
+    // Return default settings if none exist
+    return data || {
+        greeting_template: 'Привет, {name}!',
+        show_week_indicator: true,
+        show_calls_block: true,
+        no_calls_text: 'Нет запланированных созвонов',
+        cohort_start_date: null,
+        week_duration_days: 7,
+        total_weeks: 4
+    };
+};
+
+export const updateDashboardSettings = async (settings: {
+    greeting_template?: string;
+    show_week_indicator?: boolean;
+    show_calls_block?: boolean;
+    no_calls_text?: string;
+    cohort_start_date?: string | null;
+    week_duration_days?: number;
+    total_weeks?: number;
+}) => {
+    // Get existing settings
+    const { data: existing } = await supabase
+        .from('dashboard_settings')
+        .select('id')
+        .limit(1)
+        .single();
+
+    if (existing) {
+        // Update existing
+        const { data, error } = await supabase
+            .from('dashboard_settings')
+            .update(settings)
+            .eq('id', existing.id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    } else {
+        // Create new
+        const { data, error } = await supabase
+            .from('dashboard_settings')
+            .insert([settings])
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    }
+};
+
+// --- Complete Dashboard Data for Student ---
+
+export const fetchCompleteDashboardData = async (userId: string) => {
+    try {
+        // Fetch settings
+        const settings = await fetchDashboardSettings();
+
+        // Calculate current week
+        const currentWeek = await getCurrentWeek();
+
+        // Fetch tasks for current week
+        const tasks = await fetchAllDashboardTasks(currentWeek);
+
+        // Fetch user's progress
+        const progress = await fetchUserDashboardProgress(userId, currentWeek);
+
+        // Create a map of completed tasks
+        const completedMap = new Map(
+            progress.map((p: any) => [p.task_id, p.completed])
+        );
+
+        // Merge tasks with completion status
+        const tasksWithStatus = tasks.map(task => ({
+            id: task.id,
+            title: task.title,
+            link: task.link,
+            completed: completedMap.get(task.id) || false
+        }));
+
+        // Fetch quick links
+        const quickLinks = await fetchAllQuickLinks(true);
+
+        // Fetch upcoming call
+        const calls = await fetchAllCalls();
+        const upcomingCall = calls.find((call: any) => {
+            return call.status === 'scheduled' || call.status === 'live';
+        });
+
+        return {
+            currentWeek,
+            totalWeeks: settings.total_weeks,
+            tasks: tasksWithStatus,
+            completedCount: tasksWithStatus.filter(t => t.completed).length,
+            totalCount: tasksWithStatus.length,
+            quickLinks: quickLinks.map(link => ({
+                title: link.title,
+                icon: link.icon,
+                url: link.url
+            })),
+            upcomingCall: upcomingCall ? {
+                id: upcomingCall.id,
+                title: upcomingCall.topic,
+                date: upcomingCall.date,
+                time: upcomingCall.time,
+                link: upcomingCall.meetingUrl
+            } : null,
+            settings: {
+                greetingTemplate: settings.greeting_template,
+                showWeekIndicator: settings.show_week_indicator,
+                showCallsBlock: settings.show_calls_block,
+                noCallsText: settings.no_calls_text
+            }
+        };
+    } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        throw error;
+    }
+};
+
+// --- Helper: Calculate Current Week ---
+
+export const getCurrentWeek = async (): Promise<number> => {
+    const settings = await fetchDashboardSettings();
+
+    if (!settings.cohort_start_date) {
+        return 1; // Default to week 1 if no start date
+    }
+
+    const startDate = new Date(settings.cohort_start_date);
+    const now = new Date();
+    const daysSinceStart = Math.floor((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (daysSinceStart < 0) {
+        return 1; // Before start date
+    }
+
+    const weekNumber = Math.floor(daysSinceStart / settings.week_duration_days) + 1;
+
+    // Cap at total weeks
+    return Math.min(weekNumber, settings.total_weeks);
+};
