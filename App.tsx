@@ -143,13 +143,13 @@ const AppContent: React.FC = () => {
           fetchAppContent('stages')
       ]);
 
-      if (dbModules) setModules(dbModules);
-      if (dbPrompts) setPrompts(dbPrompts);
-      if (dbPromptCategories) setPromptCategories(dbPromptCategories);
-      if (dbRoadmaps) setRoadmaps(dbRoadmaps);
-      if (dbStyles) setStyles(dbStyles);
-      if (dbGlossary) setGlossary(dbGlossary);
-      if (dbStages) setStages(dbStages);
+      if (dbModules?.length) setModules(dbModules);
+      if (dbPrompts?.length) setPrompts(dbPrompts);
+      if (dbPromptCategories?.length) setPromptCategories(dbPromptCategories);
+      if (dbRoadmaps?.length) setRoadmaps(dbRoadmaps);
+      if (dbStyles?.length) setStyles(dbStyles);
+      if (dbGlossary?.length) setGlossary(dbGlossary);
+      if (dbStages?.length) setStages(dbStages);
   };
 
   const loadUserProgress = async (userId: string) => {

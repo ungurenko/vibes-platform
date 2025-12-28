@@ -311,7 +311,12 @@ export const fetchAllCalls = async () => {
         .order('date', { ascending: false })
         .order('time', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+        console.error('Error fetching calls:', error);
+        return [];
+    }
+
+    if (!data) return [];
 
     return data.map(call => ({
         id: call.id,
