@@ -34,8 +34,8 @@ const Home: React.FC<HomeProps> = ({
   const [upcomingCall, setUpcomingCall] = useState<any>(null);
   const [isLoadingTasks, setIsLoadingTasks] = useState(true);
 
-  const activeStage = stages.find(s => s.id === activeStageId) || stages[0];
-  const currentWeek = activeStage.subtitle || `Неделя ${activeStageId}`;
+  const activeStage = stages.find(s => s.id === activeStageId) || stages[0] || { id: 1, title: 'Загрузка...', subtitle: 'Неделя 1', tasks: [] };
+  const currentWeek = activeStage?.subtitle || `Неделя ${activeStageId}`;
 
   // Load user's completed tasks and upcoming call
   useEffect(() => {
@@ -111,8 +111,9 @@ const Home: React.FC<HomeProps> = ({
   };
 
   // Calculate Progress
-  const totalTasks = activeStage.tasks.length;
-  const completedCount = activeStage.tasks.filter(t => completedTasks.includes(t.id)).length;
+  const tasks = activeStage?.tasks || [];
+  const totalTasks = tasks.length;
+  const completedCount = tasks.filter(t => completedTasks.includes(t.id)).length;
 
   // Check if it's close to call time (15 minutes before)
   const isCallSoon = upcomingCall ? (() => {
@@ -204,8 +205,8 @@ const Home: React.FC<HomeProps> = ({
               <div className="flex items-center justify-center py-12">
                 <div className="w-8 h-8 border-4 border-violet-200 dark:border-violet-500/20 border-t-violet-600 dark:border-t-violet-400 rounded-full animate-spin" />
               </div>
-            ) : activeStage.tasks.length > 0 ? (
-              activeStage.tasks.map((task) => {
+            ) : tasks.length > 0 ? (
+              tasks.map((task) => {
                 const isDone = completedTasks.includes(task.id);
                 return (
                   <motion.div
