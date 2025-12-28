@@ -1,8 +1,8 @@
 
 import React from 'react';
 
-export type TabId = 
-  | 'dashboard' | 'lessons' | 'roadmaps' | 'styles' | 'prompts' | 'glossary' | 'assistant' | 'community' | 'profile'
+export type TabId =
+  | 'dashboard' | 'lessons' | 'roadmaps' | 'styles' | 'prompts' | 'glossary' | 'assistant' | 'profile'
   | 'admin-students' | 'admin-content' | 'admin-calls' | 'admin-assistant' | 'admin-settings';
 
 export interface NavItem {
@@ -199,22 +199,3 @@ export interface InviteLink {
   usedAt?: string; // ISO Date
 }
 
-// Community / Showcase Types
-export type ProjectCategory = 'Лендинг' | 'Веб-сервис' | 'E-commerce' | 'Креатив';
-
-export interface ShowcaseProject {
-  id: string;
-  title: string;
-  description: string;
-  imageUrl: string;
-  demoUrl: string;
-  category: ProjectCategory;
-  author: {
-    name: string;
-    avatar: string;
-    level: string;
-  };
-  likes: number;
-  isLikedByCurrentUser: boolean;
-  date: string;
-}

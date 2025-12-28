@@ -14,12 +14,11 @@ import AdminCalls from './views/AdminCalls';
 import AdminAssistant from './views/AdminAssistant';
 import AdminSettings from './views/AdminSettings';
 import UserProfile from './views/UserProfile';
-import Community from './views/Community';
 import Login from './views/Login';
 import Register from './views/Register';
 import Onboarding from './views/Onboarding';
-import { TabId, InviteLink, Student, CourseModule, PromptItem, PromptCategoryItem, Roadmap, StyleCard, GlossaryTerm, DashboardStage, ShowcaseProject } from './types';
-import { STUDENTS_DATA, COURSE_MODULES, PROMPTS_DATA, PROMPT_CATEGORIES_DATA, ROADMAPS_DATA, STYLES_DATA, GLOSSARY_DATA, DASHBOARD_STAGES, SHOWCASE_DATA } from './data';
+import { TabId, InviteLink, Student, CourseModule, PromptItem, PromptCategoryItem, Roadmap, StyleCard, GlossaryTerm, DashboardStage } from './types';
+import { STUDENTS_DATA, COURSE_MODULES, PROMPTS_DATA, PROMPT_CATEGORIES_DATA, ROADMAPS_DATA, STYLES_DATA, GLOSSARY_DATA, DASHBOARD_STAGES } from './data';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SoundProvider } from './SoundContext';
 import { 
@@ -57,7 +56,6 @@ const AppContent: React.FC = () => {
   const [styles, setStyles] = useState<StyleCard[]>(STYLES_DATA);
   const [glossary, setGlossary] = useState<GlossaryTerm[]>(GLOSSARY_DATA);
   const [stages, setStages] = useState<DashboardStage[]>(DASHBOARD_STAGES);
-  const [showcase, setShowcase] = useState<ShowcaseProject[]>(SHOWCASE_DATA);
 
   // --- UI State ---
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
@@ -133,15 +131,14 @@ const AppContent: React.FC = () => {
   }, []);
 
   const loadContent = async () => {
-      const [dbModules, dbPrompts, dbPromptCategories, dbRoadmaps, dbStyles, dbGlossary, dbStages, dbShowcase] = await Promise.all([
+      const [dbModules, dbPrompts, dbPromptCategories, dbRoadmaps, dbStyles, dbGlossary, dbStages] = await Promise.all([
           fetchAppContent('modules'),
           fetchAppContent('prompts'),
           fetchAppContent('promptCategories'),
           fetchAppContent('roadmaps'),
           fetchAppContent('styles'),
           fetchAppContent('glossary'),
-          fetchAppContent('stages'),
-          fetchAppContent('showcase')
+          fetchAppContent('stages')
       ]);
 
       if (dbModules) setModules(dbModules);
@@ -151,7 +148,6 @@ const AppContent: React.FC = () => {
       if (dbStyles) setStyles(dbStyles);
       if (dbGlossary) setGlossary(dbGlossary);
       if (dbStages) setStages(dbStages);
-      if (dbShowcase) setShowcase(dbShowcase);
   };
 
   const loadUserProgress = async (userId: string) => {
@@ -376,12 +372,11 @@ const AppContent: React.FC = () => {
       case 'prompts': return <PromptBase prompts={prompts} categories={promptCategories} />;
       case 'glossary': return <Glossary glossary={glossary} onNavigate={setActiveTab} onAskAI={handleAskAI} />;
       case 'assistant': return <Assistant initialMessage={assistantInitialMessage} onMessageHandled={() => setAssistantInitialMessage(null)} />;
-      case 'community': return <Community showcase={showcase} onUpdateShowcase={setShowcase} />;
       case 'profile': return currentUser ? <UserProfile user={currentUser} /> : <Home stages={stages} onNavigate={setActiveTab} />;
       
       // Admin Views
       case 'admin-students': return <AdminStudents students={students} onUpdateStudent={() => {}} onAddStudent={() => {}} onDeleteStudent={() => {}} />;
-      case 'admin-content': return <AdminContent modules={modules} onUpdateModules={setModules} prompts={prompts} onUpdatePrompts={setPrompts} promptCategories={promptCategories} onUpdatePromptCategories={setPromptCategories} styles={styles} onUpdateStyles={setStyles} roadmaps={roadmaps} onUpdateRoadmaps={setRoadmaps} glossary={glossary} onUpdateGlossary={setGlossary} stages={stages} onUpdateStages={setStages} showcase={showcase} onUpdateShowcase={setShowcase} />;
+      case 'admin-content': return <AdminContent modules={modules} onUpdateModules={setModules} prompts={prompts} onUpdatePrompts={setPrompts} promptCategories={promptCategories} onUpdatePromptCategories={setPromptCategories} styles={styles} onUpdateStyles={setStyles} roadmaps={roadmaps} onUpdateRoadmaps={setRoadmaps} glossary={glossary} onUpdateGlossary={setGlossary} stages={stages} onUpdateStages={setStages} />;
       case 'admin-calls': return <AdminCalls />;
       case 'admin-assistant': return <AdminAssistant />;
       case 'admin-settings': return <AdminSettings invites={invites} onGenerateInvites={handleGenerateInvites} onDeleteInvite={handleDeleteInvite} onDeactivateInvite={() => {}} />;

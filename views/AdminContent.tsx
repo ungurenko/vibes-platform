@@ -27,8 +27,8 @@ import {
   Target
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
-import { COURSE_MODULES, STYLES_DATA, PROMPTS_DATA, GLOSSARY_DATA, ROADMAPS_DATA, DASHBOARD_STAGES, SHOWCASE_DATA, PROMPT_CATEGORIES_DATA } from '../data';
-import { Lesson, StyleCard, PromptItem, PromptCategoryItem, GlossaryTerm, CourseModule, Roadmap, RoadmapStep, DashboardStage, ShowcaseProject } from '../types';
+import { COURSE_MODULES, STYLES_DATA, PROMPTS_DATA, GLOSSARY_DATA, ROADMAPS_DATA, DASHBOARD_STAGES, PROMPT_CATEGORIES_DATA } from '../data';
+import { Lesson, StyleCard, PromptItem, PromptCategoryItem, GlossaryTerm, CourseModule, Roadmap, RoadmapStep, DashboardStage } from '../types';
 import { Drawer, PageHeader, Input, Select, ConfirmModal, FileUploader } from '../components/Shared';
 import { updateAppContent } from '../lib/supabase';
 
@@ -107,8 +107,6 @@ interface AdminContentProps {
     onUpdateGlossary?: (glossary: GlossaryTerm[]) => void;
     stages?: DashboardStage[];
     onUpdateStages?: (stages: DashboardStage[]) => void;
-    showcase?: ShowcaseProject[];
-    onUpdateShowcase?: (showcase: ShowcaseProject[]) => void;
 }
 
 const AdminContent: React.FC<AdminContentProps> = ({
@@ -125,9 +123,7 @@ const AdminContent: React.FC<AdminContentProps> = ({
     glossary = GLOSSARY_DATA,
     onUpdateGlossary,
     stages = DASHBOARD_STAGES,
-    onUpdateStages,
-    showcase = SHOWCASE_DATA,
-    onUpdateShowcase
+    onUpdateStages
 }) => {
   // Enrich with admin fields for display
   const adminStyles = enrichStyles(styles);
@@ -276,8 +272,7 @@ const AdminContent: React.FC<AdminContentProps> = ({
               updateAppContent('roadmaps', roadmaps),
               updateAppContent('styles', styles),
               updateAppContent('glossary', glossary),
-              updateAppContent('stages', stages),
-              updateAppContent('showcase', showcase)
+              updateAppContent('stages', stages)
           ]);
           alert('Контент успешно сохранен в базе данных!');
       } catch (error) {
