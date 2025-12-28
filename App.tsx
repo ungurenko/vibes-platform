@@ -390,7 +390,7 @@ const AppContent: React.FC = () => {
   };
 
   return (
-    <div className={`min-h-[100dvh] bg-slate-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-sans overflow-hidden selection:bg-violet-500/30 selection:text-violet-900 dark:selection:text-white transition-colors duration-300 ${mode === 'admin' ? 'admin-mode' : ''}`}>
+    <div className={`min-h-[100dvh] ${mode === 'admin' ? 'bg-zinc-100 dark:bg-zinc-950' : 'bg-slate-50 dark:bg-zinc-950'} text-zinc-900 dark:text-zinc-100 font-sans overflow-hidden selection:bg-violet-500/30 selection:text-violet-900 dark:selection:text-white transition-colors duration-300 ${mode === 'admin' ? 'admin-mode' : ''}`}>
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden gpu-accelerated">
           {mode === 'student' ? (
               <>
@@ -399,8 +399,8 @@ const AppContent: React.FC = () => {
               </>
           ) : (
               <>
-                 <div className="absolute top-0 right-0 w-[50%] h-[50%] bg-emerald-900/5 rounded-full blur-[150px] animate-blob" />
-                 <div className="absolute bottom-0 left-0 w-[40%] h-[40%] bg-zinc-500/5 rounded-full blur-[120px] animate-blob animation-delay-2000" />
+                 <div className="absolute top-0 right-0 w-[50%] h-[50%] bg-emerald-500/10 dark:bg-emerald-900/20 rounded-full blur-[150px] animate-blob" />
+                 <div className="absolute bottom-0 left-0 w-[40%] h-[40%] bg-cyan-500/10 dark:bg-cyan-900/15 rounded-full blur-[120px] animate-blob animation-delay-2000" />
               </>
           )}
       </div>
