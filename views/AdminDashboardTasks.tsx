@@ -241,10 +241,11 @@ const AdminDashboardTasks: React.FC = () => {
   }, {} as Record<number, DashboardTask[]>);
 
   return (
-    <div className="relative max-w-[1600px] mx-auto px-4 md:px-8 py-8 md:py-12 pb-32 min-h-screen">
+    <div className="p-8 pb-32">
       <PageHeader
         title="Задачи дашборда"
         description="Управление задачами для студентов по неделям"
+        icon={<ListChecks size={32} />}
       />
 
       {/* Toolbar */}
