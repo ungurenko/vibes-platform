@@ -268,11 +268,10 @@ const AdminDashboardSettings: React.FC = () => {
   }
 
   return (
-    <div className="p-8 pb-32">
+    <div className="relative max-w-[1600px] mx-auto px-4 md:px-8 py-8 md:py-12 pb-32 min-h-screen">
       <PageHeader
         title="Настройки дашборда"
         description="Управление настройками и быстрыми ссылками дашборда студентов"
-        icon={<Settings size={32} />}
       />
 
       <div className="max-w-4xl space-y-8">
