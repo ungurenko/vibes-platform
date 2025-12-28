@@ -19,7 +19,8 @@ import {
   ListTodo,
   Volume2,
   VolumeX,
-  Lock
+  Lock,
+  ListChecks
 } from 'lucide-react';
 import { NavItem, TabId } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -49,8 +50,10 @@ const studentNavItems: NavItem[] = [
 const adminNavItems: NavItem[] = [
   { id: 'admin-students', label: 'Ученики', icon: Users },
   { id: 'admin-content', label: 'Контент', icon: Book },
+  { id: 'admin-dashboard-tasks', label: 'Задачи дашборда', icon: ListChecks },
   { id: 'admin-calls', label: 'Созвоны', icon: Video },
   { id: 'admin-assistant', label: 'Чат-ассистент', icon: Sparkles },
+  { id: 'admin-dashboard-settings', label: 'Дашборд', icon: LayoutDashboard },
   { id: 'admin-settings', label: 'Настройки', icon: Settings },
 ];
 

@@ -377,8 +377,10 @@ const AppContent: React.FC = () => {
       // Admin Views
       case 'admin-students': return <AdminStudents students={students} onUpdateStudent={() => {}} onAddStudent={() => {}} onDeleteStudent={() => {}} />;
       case 'admin-content': return <AdminContent modules={modules} onUpdateModules={setModules} prompts={prompts} onUpdatePrompts={setPrompts} promptCategories={promptCategories} onUpdatePromptCategories={setPromptCategories} styles={styles} onUpdateStyles={setStyles} roadmaps={roadmaps} onUpdateRoadmaps={setRoadmaps} glossary={glossary} onUpdateGlossary={setGlossary} stages={stages} onUpdateStages={setStages} />;
+      case 'admin-dashboard-tasks': return <AdminDashboardTasks />;
       case 'admin-calls': return <AdminCalls />;
       case 'admin-assistant': return <AdminAssistant />;
+      case 'admin-dashboard-settings': return <AdminDashboardSettings />;
       case 'admin-settings': return <AdminSettings invites={invites} onGenerateInvites={handleGenerateInvites} onDeleteInvite={handleDeleteInvite} onDeactivateInvite={() => {}} />;
 
       default: return mode === 'admin' ? <AdminStudents students={students} onUpdateStudent={() => {}} onAddStudent={() => {}} onDeleteStudent={() => {}} /> : <Home stages={stages} onNavigate={setActiveTab} userId={profile?.id} userName={profile?.full_name || 'Студент'} />;
