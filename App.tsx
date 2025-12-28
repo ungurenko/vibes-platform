@@ -13,6 +13,8 @@ import AdminContent from './views/AdminContent';
 import AdminCalls from './views/AdminCalls';
 import AdminAssistant from './views/AdminAssistant';
 import AdminSettings from './views/AdminSettings';
+import AdminDashboardTasks from './views/AdminDashboardTasks';
+import AdminDashboardSettings from './views/AdminDashboardSettings';
 import UserProfile from './views/UserProfile';
 import Login from './views/Login';
 import Register from './views/Register';
