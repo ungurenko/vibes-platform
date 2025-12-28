@@ -3,8 +3,7 @@ import React from 'react';
 
 export type TabId =
   | 'dashboard' | 'lessons' | 'roadmaps' | 'styles' | 'prompts' | 'glossary' | 'assistant' | 'profile'
-  | 'admin-students' | 'admin-content' | 'admin-calls' | 'admin-assistant' | 'admin-settings'
-  | 'admin-dashboard-tasks' | 'admin-dashboard-settings';
+  | 'admin-students' | 'admin-content' | 'admin-calls' | 'admin-assistant' | 'admin-settings';
 
 export interface NavItem {
   id: TabId;

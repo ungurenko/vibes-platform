@@ -365,25 +365,23 @@ const AppContent: React.FC = () => {
     if (!session) return <Login onLogin={handleLogin} onNavigateToRegister={() => setView('register')} onSimulateResetLink={() => setView('reset-password')} />;
 
     switch (activeTab) {
-      case 'dashboard': return <Home stages={stages} onNavigate={setActiveTab} userId={profile?.id} userName={profile?.full_name || 'Студент'} />;
+      case 'dashboard': return <Home stages={stages} onNavigate={setActiveTab} />;
       case 'lessons': return <Lessons modules={modules} completedLessons={completedLessons} onToggleLesson={handleToggleLesson} />;
       case 'roadmaps': return <Roadmaps roadmaps={roadmaps} />;
       case 'styles': return <StyleLibrary styles={styles} />;
       case 'prompts': return <PromptBase prompts={prompts} categories={promptCategories} />;
       case 'glossary': return <Glossary glossary={glossary} onNavigate={setActiveTab} onAskAI={handleAskAI} />;
       case 'assistant': return <Assistant initialMessage={assistantInitialMessage} onMessageHandled={() => setAssistantInitialMessage(null)} />;
-      case 'profile': return currentUser ? <UserProfile user={currentUser} /> : <Home stages={stages} onNavigate={setActiveTab} userId={profile?.id} userName={profile?.full_name || 'Студент'} />;
-
+      case 'profile': return currentUser ? <UserProfile user={currentUser} /> : <Home stages={stages} onNavigate={setActiveTab} />;
+      
       // Admin Views
       case 'admin-students': return <AdminStudents students={students} onUpdateStudent={() => {}} onAddStudent={() => {}} onDeleteStudent={() => {}} />;
       case 'admin-content': return <AdminContent modules={modules} onUpdateModules={setModules} prompts={prompts} onUpdatePrompts={setPrompts} promptCategories={promptCategories} onUpdatePromptCategories={setPromptCategories} styles={styles} onUpdateStyles={setStyles} roadmaps={roadmaps} onUpdateRoadmaps={setRoadmaps} glossary={glossary} onUpdateGlossary={setGlossary} stages={stages} onUpdateStages={setStages} />;
-      case 'admin-dashboard-tasks': return <AdminDashboardTasks />;
       case 'admin-calls': return <AdminCalls />;
       case 'admin-assistant': return <AdminAssistant />;
-      case 'admin-dashboard-settings': return <AdminDashboardSettings />;
       case 'admin-settings': return <AdminSettings invites={invites} onGenerateInvites={handleGenerateInvites} onDeleteInvite={handleDeleteInvite} onDeactivateInvite={() => {}} />;
 
-      default: return mode === 'admin' ? <AdminStudents students={students} onUpdateStudent={() => {}} onAddStudent={() => {}} onDeleteStudent={() => {}} /> : <Home stages={stages} onNavigate={setActiveTab} userId={profile?.id} userName={profile?.full_name || 'Студент'} />;
+      default: return mode === 'admin' ? <AdminStudents students={students} onUpdateStudent={() => {}} onAddStudent={() => {}} onDeleteStudent={() => {}} /> : <Home stages={stages} onNavigate={setActiveTab} />;
     }
   };
 
