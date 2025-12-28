@@ -27,10 +27,26 @@ import {
   Target
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
-import { COURSE_MODULES, STYLES_DATA, PROMPTS_DATA, GLOSSARY_DATA, ROADMAPS_DATA, DASHBOARD_STAGES, SHOWCASE_DATA } from '../data';
-import { Lesson, StyleCard, PromptItem, GlossaryTerm, CourseModule, Roadmap, RoadmapStep, DashboardStage, ShowcaseProject } from '../types';
+import { COURSE_MODULES, STYLES_DATA, PROMPTS_DATA, GLOSSARY_DATA, ROADMAPS_DATA, DASHBOARD_STAGES, SHOWCASE_DATA, PROMPT_CATEGORIES_DATA } from '../data';
+import { Lesson, StyleCard, PromptItem, PromptCategoryItem, GlossaryTerm, CourseModule, Roadmap, RoadmapStep, DashboardStage, ShowcaseProject } from '../types';
 import { Drawer, PageHeader, Input, Select, ConfirmModal, FileUploader } from '../components/Shared';
 import { updateAppContent } from '../lib/supabase';
+
+// Available colors for categories
+const AVAILABLE_COLORS = [
+  { value: 'indigo', label: 'Индиго', class: 'bg-indigo-500' },
+  { value: 'violet', label: 'Фиолетовый', class: 'bg-violet-500' },
+  { value: 'blue', label: 'Синий', class: 'bg-blue-500' },
+  { value: 'pink', label: 'Розовый', class: 'bg-pink-500' },
+  { value: 'red', label: 'Красный', class: 'bg-red-500' },
+  { value: 'emerald', label: 'Изумрудный', class: 'bg-emerald-500' },
+  { value: 'amber', label: 'Янтарный', class: 'bg-amber-500' },
+  { value: 'cyan', label: 'Голубой', class: 'bg-cyan-500' },
+  { value: 'green', label: 'Зелёный', class: 'bg-green-500' },
+  { value: 'orange', label: 'Оранжевый', class: 'bg-orange-500' },
+  { value: 'purple', label: 'Пурпурный', class: 'bg-purple-500' },
+  { value: 'teal', label: 'Бирюзовый', class: 'bg-teal-500' },
+];
 
 // --- Types & Config ---
 
@@ -81,6 +97,8 @@ interface AdminContentProps {
     onUpdateModules?: (modules: CourseModule[]) => void;
     prompts?: PromptItem[];
     onUpdatePrompts?: (prompts: PromptItem[]) => void;
+    promptCategories?: PromptCategoryItem[];
+    onUpdatePromptCategories?: (categories: PromptCategoryItem[]) => void;
     roadmaps?: Roadmap[];
     onUpdateRoadmaps?: (roadmaps: Roadmap[]) => void;
     styles?: StyleCard[];
@@ -98,6 +116,8 @@ const AdminContent: React.FC<AdminContentProps> = ({
     onUpdateModules,
     prompts = PROMPTS_DATA,
     onUpdatePrompts,
+    promptCategories = PROMPT_CATEGORIES_DATA,
+    onUpdatePromptCategories,
     roadmaps = ROADMAPS_DATA,
     onUpdateRoadmaps,
     styles = STYLES_DATA,
@@ -125,27 +145,21 @@ const AdminContent: React.FC<AdminContentProps> = ({
   // Category Management State
   const [customCategory, setCustomCategory] = useState<string>('');
   const [isAddingCategory, setIsAddingCategory] = useState<boolean>(false);
+  const [isCategoryEditorOpen, setIsCategoryEditorOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<PromptCategoryItem | null>(null);
 
-  // Default prompt categories (from types.ts)
-  const DEFAULT_PROMPT_CATEGORIES = [
-    'Проектирование',
-    'Создание лендинга',
-    'Создание веб-сервиса',
-    'Улучшение дизайна',
-    'Исправление ошибок',
-    'Добавление функций',
-    'Работа с API',
-    'Оптимизация кода'
-  ];
+  // Get sorted prompt categories
+  const sortedPromptCategories = [...promptCategories].sort((a, b) => a.order - b.order);
 
-  // Get unique categories from existing data + current editing item + defaults
+  // Get unique categories from existing data + current editing item + stored categories
   const getUniqueCategories = (type: 'prompts' | 'roadmaps' | 'styles') => {
     let categories: string[] = [];
 
     if (type === 'prompts') {
-      // Start with default categories, then add any custom ones from data
+      // Use stored categories, then add any custom ones from data
+      const storedCategories = promptCategories.map(c => c.name);
       const dataCategories = prompts.map(p => p.category);
-      categories = Array.from(new Set([...DEFAULT_PROMPT_CATEGORIES, ...dataCategories]));
+      categories = Array.from(new Set([...storedCategories, ...dataCategories]));
     } else if (type === 'roadmaps') {
       categories = Array.from(new Set(roadmaps.map(r => r.category)));
     } else if (type === 'styles') {
@@ -160,6 +174,94 @@ const AdminContent: React.FC<AdminContentProps> = ({
     return categories.filter(c => c); // Remove empty strings
   };
 
+  // Category CRUD handlers
+  const handleAddCategory = () => {
+    setEditingCategory({
+      id: `cat-${Date.now()}`,
+      name: '',
+      icon: '📁',
+      color: 'indigo',
+      order: promptCategories.length + 1
+    });
+    setIsCategoryEditorOpen(true);
+  };
+
+  const handleEditCategory = (category: PromptCategoryItem) => {
+    setEditingCategory({ ...category });
+    setIsCategoryEditorOpen(true);
+  };
+
+  const handleSaveCategory = () => {
+    if (!editingCategory || !editingCategory.name.trim()) return;
+
+    const existingIndex = promptCategories.findIndex(c => c.id === editingCategory.id);
+    let newCategories: PromptCategoryItem[];
+
+    if (existingIndex >= 0) {
+      // Update existing - also update prompts with old category name
+      const oldName = promptCategories[existingIndex].name;
+      const newName = editingCategory.name;
+
+      if (oldName !== newName && onUpdatePrompts) {
+        const updatedPrompts = prompts.map(p =>
+          p.category === oldName ? { ...p, category: newName } : p
+        );
+        onUpdatePrompts(updatedPrompts);
+      }
+
+      newCategories = [...promptCategories];
+      newCategories[existingIndex] = editingCategory;
+    } else {
+      // Add new
+      newCategories = [...promptCategories, editingCategory];
+    }
+
+    if (onUpdatePromptCategories) {
+      onUpdatePromptCategories(newCategories);
+    }
+    setIsCategoryEditorOpen(false);
+    setEditingCategory(null);
+  };
+
+  const handleDeleteCategory = (categoryId: string) => {
+    const category = promptCategories.find(c => c.id === categoryId);
+    if (!category) return;
+
+    // Check if any prompts use this category
+    const promptsUsingCategory = prompts.filter(p => p.category === category.name);
+    if (promptsUsingCategory.length > 0) {
+      alert(`Невозможно удалить категорию "${category.name}" - она используется в ${promptsUsingCategory.length} промптах.`);
+      return;
+    }
+
+    if (confirm(`Удалить категорию "${category.name}"?`)) {
+      if (onUpdatePromptCategories) {
+        onUpdatePromptCategories(promptCategories.filter(c => c.id !== categoryId));
+      }
+    }
+  };
+
+  const handleMoveCategory = (categoryId: string, direction: 'up' | 'down') => {
+    const index = sortedPromptCategories.findIndex(c => c.id === categoryId);
+    if (index < 0) return;
+
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= sortedPromptCategories.length) return;
+
+    // Swap orders
+    const newCategories = [...promptCategories];
+    const catA = newCategories.find(c => c.id === sortedPromptCategories[index].id)!;
+    const catB = newCategories.find(c => c.id === sortedPromptCategories[newIndex].id)!;
+
+    const tempOrder = catA.order;
+    catA.order = catB.order;
+    catB.order = tempOrder;
+
+    if (onUpdatePromptCategories) {
+      onUpdatePromptCategories(newCategories);
+    }
+  };
+
   // --- Helpers ---
 
   const saveToCloud = async () => {
@@ -170,6 +272,7 @@ const AdminContent: React.FC<AdminContentProps> = ({
           await Promise.all([
               updateAppContent('modules', modules),
               updateAppContent('prompts', prompts),
+              updateAppContent('promptCategories', promptCategories),
               updateAppContent('roadmaps', roadmaps),
               updateAppContent('styles', styles),
               updateAppContent('glossary', glossary),
@@ -554,50 +657,195 @@ const AdminContent: React.FC<AdminContentProps> = ({
 
   const renderPromptsView = () => {
      return (
-        <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-white/5 overflow-hidden">
-           <table className="w-full text-left">
-              <thead className="bg-zinc-50 dark:bg-white/5 border-b border-zinc-200 dark:border-white/5">
-                 <tr>
-                    <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-wider">Категория</th>
-                    <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-wider">Название</th>
-                    <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-wider">Копирований</th>
-                    <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-wider">Статус</th>
-                    <th className="px-6 py-4 text-right"></th>
-                 </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                 {adminPrompts.map((prompt) => (
-                    <tr key={prompt.id} className="hover:bg-zinc-50 dark:hover:bg-white/[0.02] group">
-                       <td className="px-6 py-4">
-                          <span className="inline-block px-2 py-1 rounded text-xs font-medium bg-zinc-100 dark:bg-white/10 text-zinc-600 dark:text-zinc-300">
-                             {prompt.category}
+        <div className="space-y-8">
+           {/* Categories Section */}
+           <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-white/5 p-6">
+              <div className="flex items-center justify-between mb-4">
+                 <h3 className="font-bold text-lg text-zinc-900 dark:text-white">Категории промптов</h3>
+                 <button
+                    onClick={handleAddCategory}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 text-white font-bold text-sm hover:bg-violet-500 transition-colors"
+                 >
+                    <Plus size={16} />
+                    Добавить
+                 </button>
+              </div>
+              <div className="space-y-2">
+                 {sortedPromptCategories.map((category, index) => (
+                    <div
+                       key={category.id}
+                       className="flex items-center gap-4 p-3 rounded-xl bg-zinc-50 dark:bg-white/5 group"
+                    >
+                       <div className="flex flex-col gap-1">
+                          <button
+                             onClick={() => handleMoveCategory(category.id, 'up')}
+                             disabled={index === 0}
+                             className="p-1 text-zinc-400 hover:text-zinc-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                             <ChevronUp size={14} />
+                          </button>
+                          <button
+                             onClick={() => handleMoveCategory(category.id, 'down')}
+                             disabled={index === sortedPromptCategories.length - 1}
+                             className="p-1 text-zinc-400 hover:text-zinc-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                             <ChevronDown size={14} />
+                          </button>
+                       </div>
+                       <span className="text-2xl">{category.icon}</span>
+                       <div className="flex-1">
+                          <span className="font-medium text-zinc-900 dark:text-white">{category.name}</span>
+                          <span className="ml-2 text-xs text-zinc-400">
+                             ({prompts.filter(p => p.category === category.name).length} промптов)
                           </span>
-                       </td>
-                       <td className="px-6 py-4">
-                          <div className="font-bold text-zinc-900 dark:text-white text-sm">{prompt.title}</div>
-                          <div className="text-xs text-zinc-500 truncate max-w-[200px]">{prompt.description}</div>
-                       </td>
-                       <td className="px-6 py-4 text-sm text-zinc-500 dark:text-zinc-400 font-mono">
-                          {prompt.copyCount}
-                       </td>
-                       <td className="px-6 py-4">
-                          <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${
-                             prompt.status === 'published' ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-amber-100 text-amber-600'
-                          }`}>
-                             <span className={`w-1.5 h-1.5 rounded-full ${prompt.status === 'published' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                             {prompt.status}
-                          </div>
-                       </td>
-                       <td className="px-6 py-4 text-right">
-                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                             <button onClick={() => openEditor(prompt)} className="p-2 text-zinc-400 hover:text-zinc-900 dark:hover:text-white"><Edit size={16} /></button>
-                             <button onClick={() => confirmDelete(prompt.id, 'prompts')} className="p-2 text-zinc-400 hover:text-red-500"><Trash2 size={16} /></button>
-                          </div>
-                       </td>
-                    </tr>
+                       </div>
+                       <div className={`w-6 h-6 rounded-full ${AVAILABLE_COLORS.find(c => c.value === category.color)?.class || 'bg-zinc-400'}`} />
+                       <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                             onClick={() => handleEditCategory(category)}
+                             className="p-2 text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
+                          >
+                             <Edit size={16} />
+                          </button>
+                          <button
+                             onClick={() => handleDeleteCategory(category.id)}
+                             className="p-2 text-zinc-400 hover:text-red-500"
+                          >
+                             <Trash2 size={16} />
+                          </button>
+                       </div>
+                    </div>
                  ))}
-              </tbody>
-           </table>
+              </div>
+           </div>
+
+           {/* Prompts Table */}
+           <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-white/5 overflow-hidden">
+              <table className="w-full text-left">
+                 <thead className="bg-zinc-50 dark:bg-white/5 border-b border-zinc-200 dark:border-white/5">
+                    <tr>
+                       <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-wider">Категория</th>
+                       <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-wider">Название</th>
+                       <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-wider">Копирований</th>
+                       <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-wider">Статус</th>
+                       <th className="px-6 py-4 text-right"></th>
+                    </tr>
+                 </thead>
+                 <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
+                    {adminPrompts.map((prompt) => (
+                       <tr key={prompt.id} className="hover:bg-zinc-50 dark:hover:bg-white/[0.02] group">
+                          <td className="px-6 py-4">
+                             <span className="inline-block px-2 py-1 rounded text-xs font-medium bg-zinc-100 dark:bg-white/10 text-zinc-600 dark:text-zinc-300">
+                                {prompt.category}
+                             </span>
+                          </td>
+                          <td className="px-6 py-4">
+                             <div className="font-bold text-zinc-900 dark:text-white text-sm">{prompt.title}</div>
+                             <div className="text-xs text-zinc-500 truncate max-w-[200px]">{prompt.description}</div>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-zinc-500 dark:text-zinc-400 font-mono">
+                             {prompt.copyCount}
+                          </td>
+                          <td className="px-6 py-4">
+                             <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${
+                                prompt.status === 'published' ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-amber-100 text-amber-600'
+                             }`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${prompt.status === 'published' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                                {prompt.status}
+                             </div>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                             <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={() => openEditor(prompt)} className="p-2 text-zinc-400 hover:text-zinc-900 dark:hover:text-white"><Edit size={16} /></button>
+                                <button onClick={() => confirmDelete(prompt.id, 'prompts')} className="p-2 text-zinc-400 hover:text-red-500"><Trash2 size={16} /></button>
+                             </div>
+                          </td>
+                       </tr>
+                    ))}
+                 </tbody>
+              </table>
+           </div>
+
+           {/* Category Editor Modal */}
+           <AnimatePresence>
+              {isCategoryEditorOpen && editingCategory && (
+                 <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
+                    <motion.div
+                       initial={{ opacity: 0 }}
+                       animate={{ opacity: 1 }}
+                       exit={{ opacity: 0 }}
+                       onClick={() => setIsCategoryEditorOpen(false)}
+                       className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                    />
+                    <motion.div
+                       initial={{ opacity: 0, scale: 0.95 }}
+                       animate={{ opacity: 1, scale: 1 }}
+                       exit={{ opacity: 0, scale: 0.95 }}
+                       className="relative w-full max-w-md bg-white dark:bg-zinc-900 rounded-2xl p-6 shadow-2xl"
+                    >
+                       <h3 className="text-xl font-bold text-zinc-900 dark:text-white mb-6">
+                          {promptCategories.find(c => c.id === editingCategory.id) ? 'Редактировать категорию' : 'Новая категория'}
+                       </h3>
+
+                       <div className="space-y-4">
+                          <div>
+                             <label className="block text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-2">Название</label>
+                             <input
+                                type="text"
+                                value={editingCategory.name}
+                                onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
+                                placeholder="Название категории..."
+                                className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 focus:outline-none focus:border-violet-500"
+                             />
+                          </div>
+
+                          <div>
+                             <label className="block text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-2">Иконка (эмодзи)</label>
+                             <input
+                                type="text"
+                                value={editingCategory.icon}
+                                onChange={(e) => setEditingCategory({ ...editingCategory, icon: e.target.value })}
+                                placeholder="📋"
+                                className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 focus:outline-none focus:border-violet-500 text-2xl"
+                             />
+                          </div>
+
+                          <div>
+                             <label className="block text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-2">Цвет</label>
+                             <div className="flex flex-wrap gap-2">
+                                {AVAILABLE_COLORS.map(color => (
+                                   <button
+                                      key={color.value}
+                                      onClick={() => setEditingCategory({ ...editingCategory, color: color.value })}
+                                      className={`w-10 h-10 rounded-full ${color.class} ${
+                                         editingCategory.color === color.value ? 'ring-2 ring-offset-2 ring-zinc-900 dark:ring-white' : ''
+                                      }`}
+                                      title={color.label}
+                                   />
+                                ))}
+                             </div>
+                          </div>
+                       </div>
+
+                       <div className="flex gap-3 mt-6">
+                          <button
+                             onClick={() => setIsCategoryEditorOpen(false)}
+                             className="flex-1 px-4 py-3 rounded-xl border border-zinc-200 dark:border-white/10 font-bold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/5"
+                          >
+                             Отмена
+                          </button>
+                          <button
+                             onClick={handleSaveCategory}
+                             disabled={!editingCategory.name.trim()}
+                             className="flex-1 px-4 py-3 rounded-xl bg-violet-600 text-white font-bold hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                             Сохранить
+                          </button>
+                       </div>
+                    </motion.div>
+                 </div>
+              )}
+           </AnimatePresence>
         </div>
      );
   };

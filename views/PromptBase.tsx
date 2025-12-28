@@ -1,61 +1,71 @@
 
 import React, { useState, useMemo } from 'react';
-import { 
-  Copy, 
-  Check, 
-  Terminal, 
-  Search, 
-  X, 
+import {
+  Copy,
+  Check,
+  Terminal,
+  Search,
+  X,
   Layers,
   ArrowRight
 } from 'lucide-react';
-import { PROMPTS_DATA } from '../data';
-import { PromptCategory, PromptItem } from '../types';
+import { PROMPTS_DATA, PROMPT_CATEGORIES_DATA } from '../data';
+import { PromptCategory, PromptItem, PromptCategoryItem } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSound } from '../SoundContext';
 
-// --- Constants & Types ---
+// --- Helper Functions ---
 
-const CATEGORIES: PromptCategory[] = [
-  'Проектирование',
-  'Создание лендинга',
-  'Создание веб-сервиса',
-  'Улучшение дизайна',
-  'Исправление ошибок',
-  'Добавление функций',
-  'Работа с API',
-  'Оптимизация кода'
-];
-
-const CATEGORY_COLORS: Record<string, string> = {
-  'Проектирование': 'text-indigo-500 bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200 dark:border-indigo-500/20',
-  'Создание лендинга': 'text-violet-500 bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/20',
-  'Создание веб-сервиса': 'text-blue-500 bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/20',
-  'Улучшение дизайна': 'text-pink-500 bg-pink-50 dark:bg-pink-500/10 border-pink-200 dark:border-pink-500/20',
-  'Исправление ошибок': 'text-red-500 bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20',
-  'Добавление функций': 'text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20',
-  'Работа с API': 'text-amber-500 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20',
-  'Оптимизация кода': 'text-cyan-500 bg-cyan-50 dark:bg-cyan-500/10 border-cyan-200 dark:border-cyan-500/20',
-};
-
-const CATEGORY_ICONS: Record<string, string> = {
-  'Проектирование': '📋',
-  'Создание лендинга': '🎨',
-  'Создание веб-сервиса': '⚡',
-  'Улучшение дизайна': '✨',
-  'Исправление ошибок': '🔧',
-  'Добавление функций': '🚀',
-  'Работа с API': '🔌',
-  'Оптимизация кода': '⚙️',
+// Generate color classes from color name
+const getColorClasses = (color: string): string => {
+  const colorMap: Record<string, string> = {
+    'indigo': 'text-indigo-500 bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200 dark:border-indigo-500/20',
+    'violet': 'text-violet-500 bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/20',
+    'blue': 'text-blue-500 bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/20',
+    'pink': 'text-pink-500 bg-pink-50 dark:bg-pink-500/10 border-pink-200 dark:border-pink-500/20',
+    'red': 'text-red-500 bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20',
+    'emerald': 'text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20',
+    'amber': 'text-amber-500 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20',
+    'cyan': 'text-cyan-500 bg-cyan-50 dark:bg-cyan-500/10 border-cyan-200 dark:border-cyan-500/20',
+    'green': 'text-green-500 bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-500/20',
+    'orange': 'text-orange-500 bg-orange-50 dark:bg-orange-500/10 border-orange-200 dark:border-orange-500/20',
+    'purple': 'text-purple-500 bg-purple-50 dark:bg-purple-500/10 border-purple-200 dark:border-purple-500/20',
+    'teal': 'text-teal-500 bg-teal-50 dark:bg-teal-500/10 border-teal-200 dark:border-teal-500/20',
+  };
+  return colorMap[color] || 'text-zinc-500 bg-zinc-50 dark:bg-zinc-500/10 border-zinc-200 dark:border-zinc-500/20';
 };
 
 // --- Components ---
 
 interface PromptBaseProps {
   prompts?: PromptItem[];
+  categories?: PromptCategoryItem[];
 }
 
-const PromptBase: React.FC<PromptBaseProps> = ({ prompts = PROMPTS_DATA }) => {
+const PromptBase: React.FC<PromptBaseProps> = ({
+  prompts = PROMPTS_DATA,
+  categories = PROMPT_CATEGORIES_DATA
+}) => {
+  // Build lookup maps from categories
+  const categoryColors = useMemo(() => {
+    const map: Record<string, string> = {};
+    categories.forEach(cat => {
+      map[cat.name] = getColorClasses(cat.color);
+    });
+    return map;
+  }, [categories]);
+
+  const categoryIcons = useMemo(() => {
+    const map: Record<string, string> = {};
+    categories.forEach(cat => {
+      map[cat.name] = cat.icon;
+    });
+    return map;
+  }, [categories]);
+
+  const sortedCategories = useMemo(() => {
+    return [...categories].sort((a, b) => a.order - b.order).map(c => c.name);
+  }, [categories]);
   const { playSound } = useSound();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -113,7 +123,7 @@ const PromptBase: React.FC<PromptBaseProps> = ({ prompts = PROMPTS_DATA }) => {
             </div>
 
             <div className="flex overflow-x-auto scrollbar-none gap-2 pb-2">
-                {['Все', ...CATEGORIES].map((cat) => (
+                {['Все', ...sortedCategories].map((cat) => (
                 <button
                     key={cat}
                     onClick={() => { playSound('click'); setActiveCategory(cat as any); }}
@@ -123,7 +133,7 @@ const PromptBase: React.FC<PromptBaseProps> = ({ prompts = PROMPTS_DATA }) => {
                         : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-white/5'
                     }`}
                 >
-                    {cat !== 'Все' && <span>{CATEGORY_ICONS[cat]}</span>}
+                    {cat !== 'Все' && <span>{categoryIcons[cat]}</span>}
                     <span>{cat}</span>
                 </button>
                 ))}
@@ -133,7 +143,7 @@ const PromptBase: React.FC<PromptBaseProps> = ({ prompts = PROMPTS_DATA }) => {
         {/* Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredPrompts.map((prompt) => {
-            const colorClass = CATEGORY_COLORS[prompt.category] || 'text-zinc-500 bg-zinc-50 border-zinc-200';
+            const colorClass = categoryColors[prompt.category] || 'text-zinc-500 bg-zinc-50 border-zinc-200';
             const isStack = !!prompt.steps;
             
             return (
@@ -225,7 +235,7 @@ const PromptBase: React.FC<PromptBaseProps> = ({ prompts = PROMPTS_DATA }) => {
                      <div className="flex justify-between items-start gap-4">
                         <div>
                            <div className="flex items-center gap-3 mb-3">
-                              <span className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border ${CATEGORY_COLORS[selectedPrompt.category]}`}>
+                              <span className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border ${categoryColors[selectedPrompt.category]}`}>
                                  {selectedPrompt.category}
                               </span>
                               {selectedPrompt.steps && (

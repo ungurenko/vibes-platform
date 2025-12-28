@@ -84,15 +84,16 @@ export interface CourseModule {
   lessons: Lesson[];
 }
 
-export type PromptCategory =
-  | 'Проектирование'
-  | 'Создание лендинга'
-  | 'Создание веб-сервиса'
-  | 'Улучшение дизайна'
-  | 'Исправление ошибок'
-  | 'Добавление функций'
-  | 'Работа с API'
-  | 'Оптимизация кода';
+// Dynamic prompt category type (stored in database)
+export type PromptCategory = string;
+
+export interface PromptCategoryItem {
+  id: string;
+  name: string;
+  icon: string;
+  color: string; // Tailwind color class prefix (e.g., 'violet', 'blue', 'pink')
+  order: number;
+}
 
 export interface PromptStep {
   title: string;
