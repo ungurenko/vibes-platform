@@ -126,12 +126,26 @@ const AdminContent: React.FC<AdminContentProps> = ({
   const [customCategory, setCustomCategory] = useState<string>('');
   const [isAddingCategory, setIsAddingCategory] = useState<boolean>(false);
 
-  // Get unique categories from existing data + current editing item
+  // Default prompt categories (from types.ts)
+  const DEFAULT_PROMPT_CATEGORIES = [
+    'Проектирование',
+    'Создание лендинга',
+    'Создание веб-сервиса',
+    'Улучшение дизайна',
+    'Исправление ошибок',
+    'Добавление функций',
+    'Работа с API',
+    'Оптимизация кода'
+  ];
+
+  // Get unique categories from existing data + current editing item + defaults
   const getUniqueCategories = (type: 'prompts' | 'roadmaps' | 'styles') => {
     let categories: string[] = [];
 
     if (type === 'prompts') {
-      categories = Array.from(new Set(prompts.map(p => p.category)));
+      // Start with default categories, then add any custom ones from data
+      const dataCategories = prompts.map(p => p.category);
+      categories = Array.from(new Set([...DEFAULT_PROMPT_CATEGORIES, ...dataCategories]));
     } else if (type === 'roadmaps') {
       categories = Array.from(new Set(roadmaps.map(r => r.category)));
     } else if (type === 'styles') {
