@@ -235,6 +235,16 @@ const AdminContent: React.FC<AdminContentProps> = ({
                 status: 'locked',
                 tasks: []
             });
+        } else if (activeTab === 'prompts') {
+            setEditingItem({
+                title: '',
+                description: '',
+                content: '',
+                usage: '',
+                category: 'Проектирование',
+                tags: [],
+                status: 'draft'
+            });
         } else {
             setEditingItem({});
         }

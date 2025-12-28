@@ -16,16 +16,37 @@ import { useSound } from '../SoundContext';
 
 // --- Constants & Types ---
 
-const CATEGORIES: PromptCategory[] = ['Лендинг', 'Веб-сервис', 'Дизайн', 'Фиксы', 'Функции', 'API', 'Оптимизация'];
+const CATEGORIES: PromptCategory[] = [
+  'Проектирование',
+  'Создание лендинга',
+  'Создание веб-сервиса',
+  'Улучшение дизайна',
+  'Исправление ошибок',
+  'Добавление функций',
+  'Работа с API',
+  'Оптимизация кода'
+];
 
 const CATEGORY_COLORS: Record<string, string> = {
-  'Лендинг': 'text-violet-500 bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/20',
-  'Веб-сервис': 'text-blue-500 bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/20',
-  'Дизайн': 'text-pink-500 bg-pink-50 dark:bg-pink-500/10 border-pink-200 dark:border-pink-500/20',
-  'Фиксы': 'text-red-500 bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20',
-  'Функции': 'text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20',
-  'API': 'text-amber-500 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20',
-  'Оптимизация': 'text-cyan-500 bg-cyan-50 dark:bg-cyan-500/10 border-cyan-200 dark:border-cyan-500/20',
+  'Проектирование': 'text-indigo-500 bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200 dark:border-indigo-500/20',
+  'Создание лендинга': 'text-violet-500 bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/20',
+  'Создание веб-сервиса': 'text-blue-500 bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/20',
+  'Улучшение дизайна': 'text-pink-500 bg-pink-50 dark:bg-pink-500/10 border-pink-200 dark:border-pink-500/20',
+  'Исправление ошибок': 'text-red-500 bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20',
+  'Добавление функций': 'text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20',
+  'Работа с API': 'text-amber-500 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20',
+  'Оптимизация кода': 'text-cyan-500 bg-cyan-50 dark:bg-cyan-500/10 border-cyan-200 dark:border-cyan-500/20',
+};
+
+const CATEGORY_ICONS: Record<string, string> = {
+  'Проектирование': '📋',
+  'Создание лендинга': '🎨',
+  'Создание веб-сервиса': '⚡',
+  'Улучшение дизайна': '✨',
+  'Исправление ошибок': '🔧',
+  'Добавление функций': '🚀',
+  'Работа с API': '🔌',
+  'Оптимизация кода': '⚙️',
 };
 
 // --- Components ---
@@ -96,13 +117,14 @@ const PromptBase: React.FC<PromptBaseProps> = ({ prompts = PROMPTS_DATA }) => {
                 <button
                     key={cat}
                     onClick={() => { playSound('click'); setActiveCategory(cat as any); }}
-                    className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all border whitespace-nowrap ${
+                    className={`px-4 py-2.5 rounded-full text-sm font-bold transition-all border whitespace-nowrap flex items-center gap-2 ${
                     activeCategory === cat
                         ? 'bg-zinc-900 dark:bg-white text-white dark:text-black border-transparent shadow-md'
                         : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-white/5'
                     }`}
                 >
-                    {cat}
+                    {cat !== 'Все' && <span>{CATEGORY_ICONS[cat]}</span>}
+                    <span>{cat}</span>
                 </button>
                 ))}
             </div>

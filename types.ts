@@ -84,7 +84,15 @@ export interface CourseModule {
   lessons: Lesson[];
 }
 
-export type PromptCategory = 'Лендинг' | 'Веб-сервис' | 'Дизайн' | 'Фиксы' | 'Функции' | 'API' | 'Оптимизация';
+export type PromptCategory =
+  | 'Проектирование'
+  | 'Создание лендинга'
+  | 'Создание веб-сервиса'
+  | 'Улучшение дизайна'
+  | 'Исправление ошибок'
+  | 'Добавление функций'
+  | 'Работа с API'
+  | 'Оптимизация кода';
 
 export interface PromptStep {
   title: string;
