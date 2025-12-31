@@ -282,6 +282,44 @@ export const sendPasswordReset = async (email: string) => {
     if (error) throw error;
 };
 
+export const updateStudentDB = async (studentId: string, data: { name?: string; email?: string }) => {
+    const updateData: Record<string, any> = {};
+    if (data.name) updateData.full_name = data.name;
+    if (data.email) updateData.email = data.email;
+
+    const { error } = await supabase
+        .from('profiles')
+        .update(updateData)
+        .eq('id', studentId);
+
+    if (error) throw error;
+};
+
+export const deleteStudentDB = async (studentId: string) => {
+    // Сначала удаляем прогресс
+    await supabase
+        .from('user_progress')
+        .delete()
+        .eq('user_id', studentId);
+
+    // Затем удаляем профиль (auth user останется, но профиль будет удален)
+    const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', studentId);
+
+    if (error) throw error;
+};
+
+export const deactivateInviteDB = async (inviteId: string) => {
+    const { error } = await supabase
+        .from('invites')
+        .update({ status: 'deactivated' })
+        .eq('id', inviteId);
+
+    if (error) throw error;
+};
+
 // --- Storage Helpers ---
 
 export const uploadFile = async (file: File, path: string = 'uploads') => {
