@@ -21,18 +21,21 @@ import { TabId, InviteLink, Student, CourseModule, PromptItem, PromptCategoryIte
 import { STUDENTS_DATA, COURSE_MODULES, PROMPTS_DATA, PROMPT_CATEGORIES_DATA, ROADMAPS_DATA, STYLES_DATA, GLOSSARY_DATA, DASHBOARD_STAGES } from './data';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SoundProvider } from './SoundContext';
-import { 
-    supabase, 
-    fetchAppContent, 
-    checkInvite, 
-    useInvite, 
-    fetchUserProgress, 
-    toggleLessonComplete, 
-    completeOnboardingDB, 
+import {
+    supabase,
+    fetchAppContent,
+    checkInvite,
+    useInvite,
+    fetchUserProgress,
+    toggleLessonComplete,
+    completeOnboardingDB,
     fetchAllStudents,
     fetchAllInvites,
     createInviteDB,
-    deleteInviteDB
+    deleteInviteDB,
+    updateStudentDB,
+    deleteStudentDB,
+    deactivateInviteDB
 } from './lib/supabase';
 
 const AppContent: React.FC = () => {
@@ -66,6 +69,10 @@ const AppContent: React.FC = () => {
   const [assistantInitialMessage, setAssistantInitialMessage] = useState<string | null>(null);
 
   // --- Derived State ---
+  const totalLessons = useMemo(() => {
+      return modules.reduce((acc, m) => acc + m.lessons.length, 0);
+  }, [modules]);
+
   const currentUser = useMemo(() => {
       if (!profile) return null;
       return {
@@ -74,13 +81,13 @@ const AppContent: React.FC = () => {
           email: profile.email,
           avatar: profile.avatar_url || `https://ui-avatars.com/api/?name=${profile.full_name}&background=8b5cf6&color=fff`,
           status: 'active',
-          progress: Math.round((completedLessons.length / 20) * 100), // Approx progress
+          progress: totalLessons > 0 ? Math.round((completedLessons.length / totalLessons) * 100) : 0,
           currentModule: 'Модуль 1',
           lastActive: 'Только что',
           joinedDate: profile.created_at,
           projects: {},
       } as Student;
-  }, [profile, completedLessons]);
+  }, [profile, completedLessons, totalLessons]);
 
   // --- Effects ---
 
@@ -270,9 +277,15 @@ const AppContent: React.FC = () => {
   };
 
   const handleRegister = async (data: { name: string; email: string; avatar?: string; password?: string }) => {
+      // Валидация пароля
+      if (!data.password || data.password.length < 8) {
+          alert('Пароль должен содержать минимум 8 символов');
+          return;
+      }
+
       const { data: authData, error } = await supabase.auth.signUp({
           email: data.email,
-          password: data.password || '',
+          password: data.password,
           options: {
               data: {
                   full_name: data.name,
@@ -317,12 +330,21 @@ const AppContent: React.FC = () => {
       };
   };
 
-  const handleGenerateInvites = async (count: number) => {
+  // Генерация криптографически безопасного токена
+  const generateSecureToken = (): string => {
+      const array = new Uint8Array(16);
+      crypto.getRandomValues(array);
+      return 'vibes-' + Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+  };
+
+  const handleGenerateInvites = async (count: number, daysValid: number | null = null) => {
       try {
-          // Generate simple random tokens for now
           for (let i = 0; i < count; i++) {
-              const token = `vibes-${Math.random().toString(36).substring(2, 7)}`;
-              await createInviteDB(token);
+              const token = generateSecureToken();
+              const expiresAt = daysValid
+                  ? new Date(Date.now() + daysValid * 24 * 60 * 60 * 1000).toISOString()
+                  : undefined;
+              await createInviteDB(token, expiresAt);
           }
           await loadAdminData(); // Refresh list
       } catch (e) {
@@ -336,6 +358,41 @@ const AppContent: React.FC = () => {
           setInvites(prev => prev.filter(inv => inv.id !== id));
       } catch (e) {
           alert("Ошибка при удалении");
+      }
+  };
+
+  const handleDeactivateInvite = async (id: string) => {
+      try {
+          await deactivateInviteDB(id);
+          setInvites(prev => prev.map(inv =>
+              inv.id === id ? { ...inv, status: 'deactivated' as const } : inv
+          ));
+      } catch (e) {
+          alert("Ошибка при деактивации инвайта");
+      }
+  };
+
+  const handleUpdateStudent = async (student: Student) => {
+      try {
+          await updateStudentDB(student.id, { name: student.name, email: student.email });
+          setStudents(prev => prev.map(s => s.id === student.id ? student : s));
+      } catch (e) {
+          alert("Ошибка при обновлении данных студента");
+      }
+  };
+
+  const handleAddStudent = async (_student: Student) => {
+      // Добавление студентов происходит через инвайт-систему
+      // Эта функция оставлена для совместимости с интерфейсом
+      alert("Для добавления студента создайте инвайт-ссылку в разделе 'Настройки'");
+  };
+
+  const handleDeleteStudent = async (id: string) => {
+      try {
+          await deleteStudentDB(id);
+          setStudents(prev => prev.filter(s => s.id !== id));
+      } catch (e) {
+          alert("Ошибка при удалении студента");
       }
   };
 
@@ -375,13 +432,13 @@ const AppContent: React.FC = () => {
       case 'profile': return currentUser ? <UserProfile user={currentUser} /> : <Home stages={stages} onNavigate={setActiveTab} />;
       
       // Admin Views
-      case 'admin-students': return <AdminStudents students={students} onUpdateStudent={() => {}} onAddStudent={() => {}} onDeleteStudent={() => {}} />;
+      case 'admin-students': return <AdminStudents students={students} onUpdateStudent={handleUpdateStudent} onAddStudent={handleAddStudent} onDeleteStudent={handleDeleteStudent} />;
       case 'admin-content': return <AdminContent modules={modules} onUpdateModules={setModules} prompts={prompts} onUpdatePrompts={setPrompts} promptCategories={promptCategories} onUpdatePromptCategories={setPromptCategories} styles={styles} onUpdateStyles={setStyles} roadmaps={roadmaps} onUpdateRoadmaps={setRoadmaps} glossary={glossary} onUpdateGlossary={setGlossary} stages={stages} onUpdateStages={setStages} />;
       case 'admin-calls': return <AdminCalls />;
       case 'admin-assistant': return <AdminAssistant />;
-      case 'admin-settings': return <AdminSettings invites={invites} onGenerateInvites={handleGenerateInvites} onDeleteInvite={handleDeleteInvite} onDeactivateInvite={() => {}} />;
+      case 'admin-settings': return <AdminSettings invites={invites} onGenerateInvites={handleGenerateInvites} onDeleteInvite={handleDeleteInvite} onDeactivateInvite={handleDeactivateInvite} />;
 
-      default: return mode === 'admin' ? <AdminStudents students={students} onUpdateStudent={() => {}} onAddStudent={() => {}} onDeleteStudent={() => {}} /> : <Home stages={stages} onNavigate={setActiveTab} />;
+      default: return mode === 'admin' ? <AdminStudents students={students} onUpdateStudent={handleUpdateStudent} onAddStudent={handleAddStudent} onDeleteStudent={handleDeleteStudent} /> : <Home stages={stages} onNavigate={setActiveTab} />;
     }
   };
 
@@ -404,7 +461,7 @@ const AppContent: React.FC = () => {
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} theme={theme} toggleTheme={toggleTheme} mode={mode} setMode={setMode} />
 
       <main className="md:pl-72 min-h-[100dvh] flex flex-col relative z-10">
-        <header className="md:hidden h-auto py-4 flex items-center justify-between px-6 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl sticky top-0 z-30 border-b border-zinc-200 dark:border-white/5 transition-colors duration-300">
+        <header className="md:hidden h-auto pt-[max(1rem,env(safe-area-inset-top))] pb-4 flex items-center justify-between px-6 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl sticky top-0 z-30 border-b border-zinc-200 dark:border-white/5 transition-colors duration-300">
           <div className="flex items-center gap-3">
              {mode === 'student' ? (
                  <img src="https://i.imgur.com/f3UfhpM.png" alt="VIBES Logo" className="h-10 w-auto object-contain dark:brightness-0 dark:invert" />
@@ -433,7 +490,7 @@ const AppContent: React.FC = () => {
             </div>
         </div>
 
-        <div className="flex-1 w-full max-w-[1600px] mx-auto pt-0">
+        <div className="flex-1 w-full max-w-[1600px] mx-auto pt-0 pb-[env(safe-area-inset-bottom)]">
            <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
