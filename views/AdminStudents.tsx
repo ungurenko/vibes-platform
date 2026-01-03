@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { STUDENT_ACTIVITY_LOG, STUDENT_CHAT_HISTORY } from '../data';
+import { STUDENT_ACTIVITY_LOG } from '../data';
 import { Student } from '../types';
 import { toggleUserBan, resetUserProgressDB, sendPasswordReset } from '../lib/supabase';
 import { 
@@ -89,6 +89,11 @@ const AdminStudents: React.FC<AdminStudentsProps> = ({ students, onUpdateStudent
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [studentToDelete, setStudentToDelete] = useState<string | null>(null);
 
+  // Action Confirmation Modals State
+  const [banModalState, setBanModalState] = useState<{ isOpen: boolean; student: Student | null }>({ isOpen: false, student: null });
+  const [resetProgressModalState, setResetProgressModalState] = useState<{ isOpen: boolean; student: Student | null }>({ isOpen: false, student: null });
+  const [passwordResetModalState, setPasswordResetModalState] = useState<{ isOpen: boolean; student: Student | null }>({ isOpen: false, student: null });
+
   // Form State (Separated First/Last for Admin)
   const [formData, setFormData] = useState({
       firstName: '',
@@ -175,41 +180,56 @@ const AdminStudents: React.FC<AdminStudentsProps> = ({ students, onUpdateStudent
       }
   };
 
-  const handleToggleBan = async (e: React.MouseEvent, student: Student) => {
+  const openBanModal = (e: React.MouseEvent, student: Student) => {
       e.stopPropagation();
+      setBanModalState({ isOpen: true, student });
+  };
+
+  const executeBan = async () => {
+      const student = banModalState.student;
+      if (!student) return;
       const newBanStatus = !student.isBanned;
-      if (confirm(`Вы уверены, что хотите ${newBanStatus ? 'ЗАБЛОКИРОВАТЬ' : 'РАЗБЛОКИРОВАТЬ'} пользователя ${student.name}?`)) {
-          try {
-              await toggleUserBan(student.id, newBanStatus);
-              // Optimistic update - in real app would refetch
-              alert(`Пользователь ${newBanStatus ? 'заблокирован' : 'разблокирован'}. Обновите страницу.`);
-          } catch (error: any) {
-              alert(`Ошибка: ${error.message}`);
-          }
+      try {
+          await toggleUserBan(student.id, newBanStatus);
+          setBanModalState({ isOpen: false, student: null });
+          // In real app would trigger refetch via callback
+      } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : 'Unknown error';
+          console.error('Ban error:', message);
       }
   };
 
-  const handleResetProgress = async (e: React.MouseEvent, student: Student) => {
+  const openResetProgressModal = (e: React.MouseEvent, student: Student) => {
       e.stopPropagation();
-      if (confirm(`Сбросить прогресс пользователя ${student.name}? Это действие нельзя отменить.`)) {
-          try {
-              await resetUserProgressDB(student.id);
-              alert("Прогресс сброшен.");
-          } catch (error: any) {
-              alert(`Ошибка: ${error.message}`);
-          }
+      setResetProgressModalState({ isOpen: true, student });
+  };
+
+  const executeResetProgress = async () => {
+      const student = resetProgressModalState.student;
+      if (!student) return;
+      try {
+          await resetUserProgressDB(student.id);
+          setResetProgressModalState({ isOpen: false, student: null });
+      } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : 'Unknown error';
+          console.error('Reset progress error:', message);
       }
   };
 
-  const handleSendPasswordReset = async (e: React.MouseEvent, student: Student) => {
+  const openPasswordResetModal = (e: React.MouseEvent, student: Student) => {
       e.stopPropagation();
-      if (confirm(`Отправить письмо для сброса пароля на ${student.email}?`)) {
-          try {
-              await sendPasswordReset(student.email);
-              alert("Письмо отправлено.");
-          } catch (error: any) {
-              alert(`Ошибка: ${error.message}`);
-          }
+      setPasswordResetModalState({ isOpen: true, student });
+  };
+
+  const executePasswordReset = async () => {
+      const student = passwordResetModalState.student;
+      if (!student) return;
+      try {
+          await sendPasswordReset(student.email);
+          setPasswordResetModalState({ isOpen: false, student: null });
+      } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : 'Unknown error';
+          console.error('Password reset error:', message);
       }
   };
 
@@ -383,22 +403,22 @@ const AdminStudents: React.FC<AdminStudentsProps> = ({ students, onUpdateStudent
                          </td>
                          <td className="px-6 py-4 text-right">
                             <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                               <button 
-                                  onClick={(e) => handleSendPasswordReset(e, student)}
+                               <button
+                                  onClick={(e) => openPasswordResetModal(e, student)}
                                   className="p-2 rounded-lg text-zinc-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-colors"
                                   title="Сбросить пароль"
                                >
                                   <Key size={16} />
                                </button>
-                               <button 
-                                  onClick={(e) => handleResetProgress(e, student)}
+                               <button
+                                  onClick={(e) => openResetProgressModal(e, student)}
                                   className="p-2 rounded-lg text-zinc-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors"
                                   title="Сбросить прогресс"
                                >
                                   <RotateCcw size={16} />
                                </button>
-                               <button 
-                                  onClick={(e) => handleToggleBan(e, student)}
+                               <button
+                                  onClick={(e) => openBanModal(e, student)}
                                   className={`p-2 rounded-lg transition-colors ${student.isBanned ? 'text-red-500 hover:text-emerald-500 bg-red-50 dark:bg-red-500/10' : 'text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10'}`}
                                   title={student.isBanned ? "Разблокировать" : "Заблокировать"}
                                >
@@ -677,11 +697,38 @@ const AdminStudents: React.FC<AdminStudentsProps> = ({ students, onUpdateStudent
       </AnimatePresence>
 
       {/* Delete Confirmation Modal */}
-      <ConfirmModal 
+      <ConfirmModal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={executeDelete}
         message="Вы уверены, что хотите удалить этого студента? Все данные и прогресс будут потеряны безвозвратно."
+      />
+
+      {/* Ban/Unban Confirmation Modal */}
+      <ConfirmModal
+        isOpen={banModalState.isOpen}
+        onClose={() => setBanModalState({ isOpen: false, student: null })}
+        onConfirm={executeBan}
+        title={banModalState.student?.isBanned ? "Разблокировать пользователя?" : "Заблокировать пользователя?"}
+        message={`Вы уверены, что хотите ${banModalState.student?.isBanned ? 'разблокировать' : 'заблокировать'} пользователя ${banModalState.student?.name || ''}?`}
+      />
+
+      {/* Reset Progress Confirmation Modal */}
+      <ConfirmModal
+        isOpen={resetProgressModalState.isOpen}
+        onClose={() => setResetProgressModalState({ isOpen: false, student: null })}
+        onConfirm={executeResetProgress}
+        title="Сбросить прогресс?"
+        message={`Сбросить прогресс пользователя ${resetProgressModalState.student?.name || ''}? Это действие нельзя отменить.`}
+      />
+
+      {/* Password Reset Confirmation Modal */}
+      <ConfirmModal
+        isOpen={passwordResetModalState.isOpen}
+        onClose={() => setPasswordResetModalState({ isOpen: false, student: null })}
+        onConfirm={executePasswordReset}
+        title="Сбросить пароль?"
+        message={`Отправить письмо для сброса пароля на ${passwordResetModalState.student?.email || ''}?`}
       />
     </div>
   );

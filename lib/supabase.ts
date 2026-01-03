@@ -81,24 +81,59 @@ export const supabase = createClient(
 
 // --- Content Helpers ---
 
-export const fetchAppContent = async (key: string) => {
+// Simple in-memory cache for app content
+interface CacheEntry<T> {
+    data: T;
+    timestamp: number;
+}
+
+const contentCache = new Map<string, CacheEntry<unknown>>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
+
+export const fetchAppContent = async (key: string, bypassCache = false) => {
+    // Check cache first
+    if (!bypassCache) {
+        const cached = contentCache.get(key);
+        if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+            return cached.data;
+        }
+    }
+
     const { data, error } = await supabase
         .from('app_content')
         .select('data')
         .eq('key', key)
         .single();
-    
+
     if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
         console.error(`Error fetching ${key}:`, error);
         return null;
     }
-    return data?.data || null;
+
+    const result = data?.data || null;
+
+    // Update cache
+    if (result !== null) {
+        contentCache.set(key, { data: result, timestamp: Date.now() });
+    }
+
+    return result;
 };
 
-export const updateAppContent = async (key: string, content: any) => {
+// Clear specific cache entry (call after updates)
+export const invalidateContentCache = (key: string) => {
+    contentCache.delete(key);
+};
+
+// Clear all cache entries
+export const clearContentCache = () => {
+    contentCache.clear();
+};
+
+export const updateAppContent = async (key: string, content: unknown) => {
     // Check if exists
     const { data } = await supabase.from('app_content').select('key').eq('key', key).single();
-    
+
     if (data) {
         const { error } = await supabase
             .from('app_content')
@@ -111,6 +146,9 @@ export const updateAppContent = async (key: string, content: any) => {
             .insert([{ key, data: content }]);
         if (error) throw error;
     }
+
+    // Invalidate cache after update
+    invalidateContentCache(key);
 };
 
 // --- Invite Helpers ---
@@ -229,20 +267,22 @@ export const completeOnboardingDB = async (userId: string) => {
 // --- Admin Helpers ---
 
 export const fetchAllStudents = async () => {
-    // Fetch profiles
-    const { data: profiles, error: pError } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-    
-    if (pError) throw pError;
+    // Execute both queries in parallel for better performance
+    const [profilesResult, progressResult] = await Promise.all([
+        supabase
+            .from('profiles')
+            .select('id, email, full_name, avatar_url, is_admin, is_banned, has_onboarded, created_at')
+            .order('created_at', { ascending: false }),
+        supabase
+            .from('user_progress')
+            .select('user_id')
+    ]);
 
-    // Fetch progress counts
-    const { data: progress, error: prError } = await supabase
-        .from('user_progress')
-        .select('user_id');
-        
-    if (prError) throw prError;
+    if (profilesResult.error) throw profilesResult.error;
+    if (progressResult.error) throw progressResult.error;
+
+    const profiles = profilesResult.data;
+    const progress = progressResult.data;
 
     // Map counts
     const progressMap: Record<string, number> = {};
@@ -254,9 +294,9 @@ export const fetchAllStudents = async () => {
         id: p.id,
         name: p.full_name || 'Студент',
         email: p.email,
-        avatar: p.avatar_url || `https://ui-avatars.com/api/?name=${p.full_name}&background=8b5cf6&color=fff`,
+        avatar: p.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.full_name || 'User')}&background=8b5cf6&color=fff`,
         status: p.is_banned ? 'banned' : 'active',
-        isBanned: p.is_banned, // Explicit flag
+        isBanned: p.is_banned,
         progress: progressMap[p.id] || 0,
         currentModule: 'Записанные уроки',
         lastActive: new Date(p.created_at).toLocaleDateString(),
