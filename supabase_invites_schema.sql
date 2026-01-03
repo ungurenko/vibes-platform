@@ -1,7 +1,17 @@
 -- Invites table for registration invite tokens
 -- Run this SQL in your Supabase SQL editor
 
--- Create the table (if not exists)
+-- =====================================================
+-- STEP 0: Ensure profiles table has 'role' column
+-- =====================================================
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'student';
+
+-- IMPORTANT: Set yourself as admin (replace with your email)
+-- UPDATE profiles SET role = 'admin' WHERE email = 'your-email@example.com';
+
+-- =====================================================
+-- STEP 1: Create the invites table
+-- =====================================================
 CREATE TABLE IF NOT EXISTS invites (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   token TEXT NOT NULL UNIQUE,
