@@ -375,8 +375,10 @@ const AppContent: React.FC = () => {
               await createInviteDB(token, expiresAt);
           }
           await loadAdminData(); // Refresh list
-      } catch (e) {
-          alert("Ошибка при создании инвайта");
+      } catch (e: any) {
+          console.error('Ошибка при создании инвайта:', e);
+          const errorMessage = e?.message || e?.code || 'Неизвестная ошибка';
+          alert(`Ошибка при создании инвайта: ${errorMessage}`);
       }
   };
 
