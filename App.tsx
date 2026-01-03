@@ -18,7 +18,7 @@ import UserProfile from './views/UserProfile';
 import Login from './views/Login';
 import Register from './views/Register';
 import Onboarding from './views/Onboarding';
-import { TabId, InviteLink, Student, CourseModule, PromptItem, PromptCategoryItem, Roadmap, StyleCard, GlossaryTerm, DashboardStage, PracticeActivity, PracticeProgress, PracticeStreak, QuizQuestion, Flashcard, FindErrorQuestion } from './types';
+import { TabId, InviteLink, Student, CourseModule, PromptItem, PromptCategoryItem, Roadmap, StyleCard, GlossaryTerm, DashboardStage, PracticeActivity, PracticeProgress, PracticeStreak, QuizQuestion, Flashcard, FindErrorQuestion, UserProfileData, SupabaseSession } from './types';
 import { STUDENTS_DATA, COURSE_MODULES, PROMPTS_DATA, PROMPT_CATEGORIES_DATA, ROADMAPS_DATA, STYLES_DATA, GLOSSARY_DATA, DASHBOARD_STAGES, PRACTICE_ACTIVITIES_DATA, QUIZ_WEB_BASICS_DATA, QUIZ_VIBE_TOOLS_DATA, FLASHCARDS_TERMS_DATA, FIND_ERROR_DATA } from './data';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SoundProvider } from './SoundContext';
@@ -42,8 +42,8 @@ import {
 
 const AppContent: React.FC = () => {
   // --- Auth & Routing State ---
-  const [session, setSession] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
+  const [session, setSession] = useState<SupabaseSession | null>(null);
+  const [profile, setProfile] = useState<UserProfileData | null>(null);
   const [inviteCodeFromUrl, setInviteCodeFromUrl] = useState<string | null>(null);
   const [view, setView] = useState<'login' | 'register' | 'app' | 'reset-password' | 'onboarding'>('login');
   const [isAuthLoading, setIsAuthLoading] = useState(true);

@@ -43,12 +43,26 @@ const formatTime = (date: Date) => {
 const CodeBlock: React.FC<{ code: string; language?: string }> = ({ code, language = 'text' }) => {
   const { playSound } = useSound();
   const [copied, setCopied] = useState(false);
+  const timeoutRef = useRef<number | null>(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleCopy = () => {
     playSound('copy');
     navigator.clipboard.writeText(code);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    // Clear previous timeout if exists
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = window.setTimeout(() => setCopied(false), 2000);
   };
 
   return (

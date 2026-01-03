@@ -11,7 +11,7 @@ import {
   Sparkles,
   Target
 } from 'lucide-react';
-import { TabId, DashboardStage } from '../types';
+import { TabId, DashboardStage, Call } from '../types';
 import { DASHBOARD_STAGES } from '../data';
 import { motion } from 'framer-motion';
 import { fetchAllCalls } from '../lib/supabase';
@@ -24,7 +24,7 @@ interface HomeProps {
 const Home: React.FC<HomeProps> = ({ stages = DASHBOARD_STAGES, onNavigate }) => {
   const [activeStageId, setActiveStageId] = useState<number>(1);
   const [completedTasks, setCompletedTasks] = useState<string[]>(['t1-1', 't1-2']);
-  const [upcomingCall, setUpcomingCall] = useState<any>(null);
+  const [upcomingCall, setUpcomingCall] = useState<Call | null>(null);
 
   const activeStage = stages.find(s => s.id === activeStageId) || stages[0];
 
@@ -37,12 +37,10 @@ const Home: React.FC<HomeProps> = ({ stages = DASHBOARD_STAGES, onNavigate }) =>
     try {
       const calls = await fetchAllCalls();
       // Find the next scheduled or live call
-      const now = new Date();
-      const upcoming = calls.find((call: any) => {
-        const callDate = new Date(call.date + 'T' + call.time);
+      const upcoming = calls.find((call: Call) => {
         return call.status === 'scheduled' || call.status === 'live';
       });
-      setUpcomingCall(upcoming);
+      setUpcomingCall(upcoming || null);
     } catch (error) {
       console.error('Error loading upcoming call:', error);
     }

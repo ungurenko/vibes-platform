@@ -163,7 +163,8 @@ export interface Student {
   name: string;
   avatar: string;
   email: string;
-  status: 'active' | 'inactive' | 'completed' | 'stalled';
+  status: 'active' | 'inactive' | 'completed' | 'stalled' | 'banned';
+  isBanned?: boolean;
   progress: number;
   currentModule: string;
   lastActive: string; // ISO Date string or relative time for mocks
@@ -272,4 +273,59 @@ export interface PracticeStreak {
   current_streak: number;
   last_practice_date: string;
   longest_streak: number;
+}
+
+// === AUTH & PROFILE TYPES ===
+
+export interface UserProfileData {
+  id: string;
+  email: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  is_admin: boolean;
+  is_banned: boolean;
+  has_onboarded: boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface SupabaseUser {
+  id: string;
+  email?: string;
+  created_at: string;
+}
+
+export interface SupabaseSession {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  expires_at?: number;
+  token_type: string;
+  user: SupabaseUser;
+}
+
+// === CALLS TYPES ===
+
+export type CallStatus = 'scheduled' | 'live' | 'completed' | 'cancelled';
+
+export interface CallMaterial {
+  id: string;
+  title: string;
+  url: string;
+  type: 'pdf' | 'link' | 'video';
+}
+
+export interface Call {
+  id: string;
+  date: string;
+  time: string;
+  duration: string;
+  topic: string;
+  description?: string;
+  status: CallStatus;
+  meetingUrl?: string;
+  recordingUrl?: string;
+  materials: CallMaterial[];
+  attendeesCount: number;
+  reminders: string[];
 }
