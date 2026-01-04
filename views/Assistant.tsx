@@ -275,9 +275,12 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
 
     // Используем сессию из props (от App.tsx) или пробуем получить из Supabase
     let session = sessionProp;
+    let sessionSource = 'sessionProp';
+    
     if (!session) {
       const { data } = await supabase.auth.getSession();
       session = data.session;
+      sessionSource = 'supabase.auth.getSession()';
     }
 
     if (!session) {
@@ -291,7 +294,59 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
       return;
     }
 
+    // Проверка localStorage - что там хранится (до извлечения токена)
+    try {
+      const localStorageKeys: string[] = [];
+      const localStorageData: any = {};
+      
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.includes('sb-') || key.includes('supabase') || key.includes('auth'))) {
+          localStorageKeys.push(key);
+          try {
+            const value = localStorage.getItem(key);
+            if (value) {
+              localStorageData[key] = {
+                length: value.length,
+                preview: value.substring(0, 200),
+                isString: typeof value === 'string',
+                sizeKB: (value.length / 1024).toFixed(2)
+              };
+            }
+          } catch (e) {
+            localStorageData[key] = { error: 'Failed to read' };
+          }
+        }
+      }
+      
+      console.log("[Session Debug] localStorage check:", {
+        supabaseKeys: localStorageKeys,
+        localStorageData,
+        totalSupabaseKeys: localStorageKeys.length
+      });
+    } catch (localStorageError) {
+      console.error("[Session Debug] Failed to check localStorage:", localStorageError);
+    }
+
     // Детальное логирование структуры сессии для диагностики
+    const sessionPropToken = sessionProp?.access_token;
+    const sessionPropTokenLength = sessionPropToken ? (typeof sessionPropToken === 'string' ? sessionPropToken.length : JSON.stringify(sessionPropToken).length) : 0;
+    const currentSessionToken = (session as any).access_token;
+    const currentSessionTokenLength = currentSessionToken ? (typeof currentSessionToken === 'string' ? currentSessionToken.length : JSON.stringify(currentSessionToken).length) : 0;
+    
+    console.log("[Session Debug] Session source comparison:", {
+      sessionSource,
+      hasSessionProp: !!sessionProp,
+      hasSession: !!session,
+      sessionPropTokenLength,
+      sessionPropTokenType: typeof sessionPropToken,
+      currentSessionTokenLength,
+      currentSessionTokenType: typeof currentSessionToken,
+      tokensMatch: sessionPropToken === currentSessionToken,
+      sessionKeys: session ? Object.keys(session) : [],
+      sessionPropKeys: sessionProp ? Object.keys(sessionProp) : []
+    });
+
     console.log("[Session Debug] Session structure:", {
       hasSession: !!session,
       sessionType: typeof session,
@@ -300,6 +355,7 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
       sessionStructure: session ? {
         access_token_type: typeof (session as any).access_token,
         access_token_exists: 'access_token' in session,
+        access_token_preview: typeof (session as any).access_token === 'string' ? (session as any).access_token.substring(0, 100) : 'not a string',
         user_type: typeof (session as any).user,
         user_exists: 'user' in (session || {}),
         allKeys: Object.keys(session),
@@ -365,38 +421,99 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
     };
     
     if (accessToken && typeof accessToken === 'string') {
-      tokenAnalysis.firstChars = accessToken.substring(0, 100);
-      tokenAnalysis.lastChars = accessToken.length > 100 ? accessToken.substring(accessToken.length - 100) : accessToken;
+      // Базовые характеристики
+      tokenAnalysis.first1000Chars = accessToken.substring(0, Math.min(1000, accessToken.length));
+      tokenAnalysis.last1000Chars = accessToken.length > 1000 ? accessToken.substring(accessToken.length - 1000) : accessToken;
       tokenAnalysis.charCount = accessToken.length;
       
-      // Проверка на повторяющиеся паттерны
-      const firstPart = accessToken.substring(0, Math.min(1000, accessToken.length));
-      const middlePart = accessToken.substring(Math.floor(accessToken.length / 2), Math.floor(accessToken.length / 2) + 1000);
-      tokenAnalysis.hasRepeatingPattern = firstPart === middlePart;
-      
-      // Проверка на дублирование (первые 1000 символов повторяются)
-      if (accessToken.length > 2000) {
-        const first1000 = accessToken.substring(0, 1000);
-        const second1000 = accessToken.substring(1000, 2000);
-        tokenAnalysis.isDuplicated = first1000 === second1000;
-        tokenAnalysis.duplicationCount = tokenAnalysis.isDuplicated ? Math.floor(accessToken.length / 1000) : 1;
+      // Проверка на дублирование - берем первые 500 символов и проверяем сколько раз они повторяются
+      if (accessToken.length > 1000) {
+        const pattern = accessToken.substring(0, 500);
+        let repetitionCount = 0;
+        let currentIndex = 0;
+        while (currentIndex + 500 <= accessToken.length) {
+          if (accessToken.substring(currentIndex, currentIndex + 500) === pattern) {
+            repetitionCount++;
+            currentIndex += 500;
+          } else {
+            break;
+          }
+        }
+        tokenAnalysis.repetitionCount = repetitionCount;
+        tokenAnalysis.isRepeated = repetitionCount > 1;
+        tokenAnalysis.patternLength = 500;
       }
       
-      // Проверка структуры JWT (должен содержать 2 точки)
+      // Проверка структуры JWT (должен содержать ровно 2 точки для разделения header.payload.signature)
       const dotCount = (accessToken.match(/\./g) || []).length;
       tokenAnalysis.isValidJWTStructure = dotCount === 2;
       tokenAnalysis.dotCount = dotCount;
       
+      // Проверка на валидный JWT формат (3 части разделенные точками)
+      if (dotCount === 2) {
+        const parts = accessToken.split('.');
+        tokenAnalysis.jwtParts = {
+          headerLength: parts[0]?.length || 0,
+          payloadLength: parts[1]?.length || 0,
+          signatureLength: parts[2]?.length || 0,
+          totalParts: parts.length
+        };
+        
+        // Попытка декодировать header JWT (base64url)
+        try {
+          const header = parts[0];
+          const decodedHeader = atob(header.replace(/-/g, '+').replace(/_/g, '/'));
+          tokenAnalysis.jwtHeader = JSON.parse(decodedHeader);
+        } catch (e) {
+          tokenAnalysis.jwtHeaderError = 'Failed to decode JWT header';
+        }
+      }
+      
       // Проверка на наличие JSON в токене (может быть сериализованный объект)
       try {
-        JSON.parse(accessToken);
+        const parsed = JSON.parse(accessToken);
         tokenAnalysis.isJSON = true;
+        tokenAnalysis.jsonType = typeof parsed;
       } catch {
         tokenAnalysis.isJSON = false;
       }
+      
+      // Проверка на повторяющиеся символы (может быть заполнение)
+      const uniqueChars = new Set(accessToken.substring(0, Math.min(10000, accessToken.length))).size;
+      tokenAnalysis.uniqueCharsInFirst10k = uniqueChars;
+      tokenAnalysis.isLikelyPadding = uniqueChars < 10 && accessToken.length > 10000;
     }
     
-    console.log("[Session Debug] Token extraction and analysis:", tokenAnalysis);
+    console.log("[Token Analysis] Detailed token analysis:", tokenAnalysis);
+    
+    // Если токен дублируется, пытаемся использовать только первую часть
+    if (accessToken && typeof accessToken === 'string' && tokenAnalysis.isRepeated && tokenAnalysis.repetitionCount > 1) {
+      console.warn("[Token Analysis] Token appears to be duplicated! Attempting to use first occurrence only.");
+      const originalLength = accessToken.length;
+      const patternLength = tokenAnalysis.patternLength || 500;
+      // Используем только первый паттерн (первые 500 символов + остаток до следующего паттерна, или до конца, если это JWT)
+      if (tokenAnalysis.isValidJWTStructure && tokenAnalysis.dotCount === 2) {
+        // Если это валидный JWT, берем только до конца первой сигнатуры
+        const parts = accessToken.split('.');
+        if (parts.length === 3) {
+          // Берем только первую часть JWT (header.payload.signature)
+          const firstJWT = parts[0] + '.' + parts[1] + '.' + parts[2].substring(0, parts[2].indexOf(parts[0]) >= 0 ? parts[2].indexOf(parts[0]) : parts[2].length);
+          if (firstJWT.length < accessToken.length && firstJWT.length < 10000) {
+            console.warn(`[Token Analysis] Using deduplicated token: ${originalLength} -> ${firstJWT.length} chars`);
+            accessToken = firstJWT;
+            tokenLength = firstJWT.length;
+          }
+        }
+      } else {
+        // Если не JWT, просто берем первые patternLength символов
+        const deduplicated = accessToken.substring(0, patternLength);
+        if (deduplicated.length < accessToken.length && deduplicated.length < 10000) {
+          console.warn(`[Token Analysis] Using first pattern only: ${originalLength} -> ${deduplicated.length} chars`);
+          accessToken = deduplicated;
+          tokenLength = deduplicated.length;
+        }
+      }
+    }
     
     // Предупреждение если токен слишком большой (больше 10KB - это ошибка)
     if (tokenLength > 10000) {
@@ -406,7 +523,7 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
         isString: typeof accessToken === 'string',
         tokenPreview: typeof accessToken === 'string' ? accessToken.substring(0, 100) : 'not a string',
         sessionKeys: Object.keys(session),
-        fullSessionPreview: JSON.stringify(session).substring(0, 500)
+        tokenAnalysis
       });
     }
 
