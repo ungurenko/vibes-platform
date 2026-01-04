@@ -294,10 +294,9 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 секунд timeout
 
-    // Use environment variable or fallback to relative path
-    // В dev режиме используйте deployed Vercel URL через VITE_API_CHAT_URL
-    const envApiUrl = import.meta.env.VITE_API_CHAT_URL?.trim();
-    const apiUrl = envApiUrl || "/api/chat";
+    // Use relative path directly to let browser resolve origin
+    // This fixes Safari issues with absolute URLs and mixed content
+    const apiUrl = "/api/chat";
 
     try {
       const accessToken = session.access_token;
@@ -327,19 +326,15 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
 
       // Предупреждение для разработчика при локальной разработке
       if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        if (!envApiUrl) {
-          console.warn("⚠️ API функции работают только на Vercel. Для локальной разработки используйте 'vercel dev' или установите VITE_API_CHAT_URL на deployed URL.");
-        }
+          console.warn("⚠️ API функции работают только на Vercel. Для локальной разработки используйте 'vercel dev'.");
       }
 
       // Log full URL to be absolutely sure where we are sending
-      const fullUrl = apiUrl.startsWith('http') ? apiUrl : new URL(apiUrl, window.location.origin).toString();
+      const fullUrl = new URL(apiUrl, window.location.origin).toString();
 
       console.log("🔍 AI Assistant Debug:", {
         apiUrl,
         fullUrl,
-        envVarSet: !!envApiUrl,
-        envValue: envApiUrl,
         origin: window.location.origin,
         headersCount: Object.keys(headers).length,
         hasAuth: !!headers["Authorization"],
@@ -388,8 +383,8 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
       } else if (error.name === 'TypeError' && (error.message?.includes('Failed to fetch') || error.message?.includes('Load failed'))) {
         // Обработка ошибок подключения (включая Safari "Load failed")
         const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        if (isLocalhost && !envApiUrl) {
-          errorText = 'API функции недоступны локально. Используйте "vercel dev" для локальной разработки или установите VITE_API_CHAT_URL на deployed URL.';
+        if (isLocalhost) {
+          errorText = 'API функции недоступны локально. Используйте "vercel dev" для локальной разработки.';
         } else {
           errorText = `Ошибка подключения к API. Проверьте настройки Vercel или переменные окружения.`;
         }
