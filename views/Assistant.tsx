@@ -294,9 +294,10 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 секунд timeout
 
-    // Use relative path directly to let browser resolve origin
-    // This fixes Safari issues with absolute URLs and mixed content
-    const apiUrl = "/api/chat";
+    // Use explicit URL construction to ensure Safari compatibility
+    // Fallback to relative path if origin is unavailable
+    const origin = window.location.origin || '';
+    const apiUrl = origin ? `${origin}/api/chat` : "/api/chat";
 
     try {
       const accessToken = session.access_token;
