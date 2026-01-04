@@ -4,12 +4,33 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
+// CORS headers
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
 export default async function handler(req, res) {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    Object.entries(corsHeaders).forEach(([key, value]) => {
+      res.setHeader(key, value);
+    });
+    return res.status(200).end();
+  }
+
+  // Set CORS headers for all responses
+  Object.entries(corsHeaders).forEach(([key, value]) => {
+    res.setHeader(key, value);
+  });
+
   // Разрешаем только POST запросы
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  try {
   // --- Аутентификация ---
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -102,8 +123,13 @@ export default async function handler(req, res) {
     const data = await response.json();
     return res.status(200).json(data);
 
+  } catch (fetchError) {
+    console.error("OpenRouter fetch error:", fetchError);
+    return res.status(500).json({ error: 'Ошибка при обращении к ИИ. Попробуйте позже.' });
+  }
+
   } catch (error) {
-    console.error("Server API Error:", error);
+    console.error("Unhandled API error:", error);
     return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 }
