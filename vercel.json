@@ -2,6 +2,7 @@
   "rewrites": [
     { "source": "/api/chat", "destination": "/api/chat.js" },
     { "source": "/api/ping", "destination": "/api/ping.js" },
+    { "source": "/api/debug", "destination": "/api/debug.js" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

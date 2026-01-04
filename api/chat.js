@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Инициализация Supabase для проверки токенов
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+// Инициализация Supabase перенесена внутрь handler для безопасности
+// const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+// const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
 // CORS headers
 const corsHeaders = {
@@ -45,6 +45,9 @@ export default async function handler(req, res) {
     const token = authHeader.split('Bearer ')[1];
 
     // Проверка токена через Supabase (если ключи настроены)
+    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
     if (supabaseUrl && supabaseServiceKey) {
       try {
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -55,8 +58,10 @@ export default async function handler(req, res) {
         }
       } catch (authError) {
         console.error('Auth verification error:', authError);
-        // Продолжаем если Supabase не настроен (для локальной разработки)
+        // Продолжаем если Supabase не настроен (для локальной разработки) или ошибка клиента
       }
+    } else {
+        console.warn('Supabase credentials missing - skipping auth verification');
     }
 
     // --- Валидация входных данных ---
