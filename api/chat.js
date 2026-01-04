@@ -45,8 +45,6 @@ export default async function handler(req, res) {
     const token = authHeader.split('Bearer ')[1];
 
     // Проверка токена через Supabase (если ключи настроены)
-    // ВРЕМЕННО ОТКЛЮЧЕНО ДЛЯ ОТЛАДКИ API
-    /*
     const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
@@ -65,7 +63,6 @@ export default async function handler(req, res) {
     } else {
         console.warn('Supabase credentials missing - skipping auth verification');
     }
-    */
 
     // --- Валидация входных данных ---
     console.log('[API] Request body type:', typeof req.body);
