@@ -309,6 +309,18 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
       console.warn("⚠️ API функции работают только на Vercel. Для локальной разработки используйте 'vercel dev'.");
     }
 
+    // Детальное логирование для диагностики
+    console.log("[API Request] Starting request:", {
+      url: apiUrl,
+      hostname: window.location.hostname,
+      origin: window.location.origin,
+      hasAuth: !!accessToken,
+      authTokenLength: accessToken?.length || 0,
+      messagesCount: apiMessages.length,
+      model: requestBody.model,
+      bodySize: JSON.stringify(requestBody).length
+    });
+
     // Создаём AbortController для timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 секунд timeout
@@ -316,11 +328,23 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
     let response: Response;
     
     try {
+      const fetchStartTime = Date.now();
+      console.log("[API Request] Sending fetch request...");
+      
       response = await fetch(apiUrl, {
         method: "POST",
         headers,
         body: JSON.stringify(requestBody),
         signal: controller.signal
+      });
+
+      const fetchDuration = Date.now() - fetchStartTime;
+      console.log("[API Response] Received response:", {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        duration: `${fetchDuration}ms`,
+        headers: Object.fromEntries(response.headers.entries())
       });
 
       clearTimeout(timeoutId);
@@ -329,9 +353,11 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
         let errorData: any = {};
         try {
           errorData = await response.json();
+          console.error("[API Error] Error response JSON:", errorData);
         } catch (parseError) {
           const textError = await response.text().catch(() => 'Unable to read error response');
           errorData = { error: `HTTP ${response.status}: ${response.statusText}`, raw: textError };
+          console.error("[API Error] Error response text:", textError);
         }
 
         // Создаем ошибку с детальной информацией
@@ -339,10 +365,21 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
         (apiError as any).code = errorData.code;
         (apiError as any).details = errorData.details;
         (apiError as any).status = response.status;
+        console.error("[API Error] Throwing error:", {
+          message: apiError.message,
+          code: (apiError as any).code,
+          status: (apiError as any).status,
+          details: (apiError as any).details
+        });
         throw apiError;
       }
 
       const data = await response.json();
+      console.log("[API Success] Response parsed:", {
+        hasChoices: !!data.choices,
+        choicesCount: data.choices?.length || 0,
+        hasContent: !!data.choices?.[0]?.message?.content
+      });
       const responseText = data.choices?.[0]?.message?.content || "Извини, я не смог сгенерировать ответ. Попробуй еще раз.";
 
       const newAssistantMsg: ChatMessage = {
@@ -357,7 +394,16 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
     } catch (error: any) {
       clearTimeout(timeoutId);
       
-      console.error("❌ API Error:", error);
+      console.error("❌ API Error:", {
+        name: error.name,
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        status: error.status,
+        stack: error.stack,
+        url: apiUrl,
+        hostname: window.location.hostname
+      });
 
       let errorText = 'Произошла ошибка соединения с нейросетью. Проверь интернет или API ключ.';
 
@@ -367,21 +413,22 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
       } else if (error.name === 'TypeError' && (error.message?.includes('Failed to fetch') || error.message?.includes('Load failed'))) {
         const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
         if (isLocalhost) {
-          errorText = 'API функции недоступны локально. Используйте "vercel dev" для локальной разработки.';
+          errorText = 'API функции недоступны локально.\n\nДля локальной разработки используйте:\n```bash\nvercel dev\n```\n\nЭто запустит локальный сервер с поддержкой API функций.';
         } else {
-          errorText = 'Ошибка подключения к API. Проверьте:\n\n1. Интернет-соединение\n2. Что API функция развернута на Vercel\n3. Логи Vercel Functions';
+          errorText = 'Ошибка подключения к API.\n\nВозможные причины:\n1. API функция не развернута на Vercel\n2. Проблемы с сетью или интернет-соединением\n3. Ошибка в конфигурации Vercel\n\n💡 Используйте кнопку "Проверить подключение" (⚙️) для детальной диагностики.\n\nТакже проверьте:\n- Логи Vercel Functions в Dashboard\n- Что проект задеплоен на Vercel\n- Настройки Environment Variables в Vercel';
         }
       } else if (error.code === 'OPENROUTER_KEY_MISSING') {
         errorText = error.message || 'OpenRouter API Key не настроен на сервере.';
         if (error.details) {
           errorText += `\n\n${error.details}`;
         }
-        errorText += `\n\n💡 Проверьте:\n1. Переменная OPENROUTER_API_KEY добавлена в Vercel Dashboard (Settings -> Environment Variables)\n2. Переменная добавлена для всех окружений (Production, Preview, Development)\n3. Выполнен передеплой после добавления переменной\n4. API ключ OpenRouter действителен`;
+        errorText += `\n\n💡 Инструкция по настройке:\n\n1. Откройте Vercel Dashboard → Ваш проект → Settings → Environment Variables\n2. Добавьте переменную:\n   - Имя: OPENROUTER_API_KEY\n   - Значение: ваш API ключ от OpenRouter\n3. Выберите окружения: Production, Preview, Development\n4. Нажмите "Save"\n5. Выполните передеплой проекта (Deployments → Redeploy)\n6. Проверьте, что API ключ действителен на openrouter.ai\n\n💡 Используйте кнопку "Проверить подключение" (⚙️) для проверки настроек.`;
       } else if (error.code === 'OPENROUTER_AUTH_ERROR') {
         errorText = error.message || 'Неверный API ключ OpenRouter.';
         if (error.details) {
-          errorText += `\n\n${error.details}`;
+          errorText += `\n\nДетали: ${error.details}`;
         }
+        errorText += `\n\n💡 Проверьте:\n1. API ключ корректно скопирован в Vercel\n2. Ключ не истек и активен на openrouter.ai\n3. Выполнен передеплой после изменения ключа`;
       } else if (error.code === 'OPENROUTER_RATE_LIMIT') {
         errorText = error.message || 'Превышен лимит запросов к OpenRouter API. Попробуйте позже.';
       } else if (error.code === 'OPENROUTER_CONNECTION_ERROR') {
@@ -389,15 +436,18 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
         if (error.details) {
           errorText += `\n\nДетали: ${error.details}`;
         }
+        errorText += `\n\n💡 Возможные причины:\n1. Проблемы с интернет-соединением\n2. OpenRouter API временно недоступен\n3. Проблемы с сетью Vercel\n\nПопробуйте через несколько минут или проверьте статус openrouter.ai`;
       } else if (error.code === 'OPENROUTER_SERVER_ERROR') {
-        errorText = error.message || 'Сервис OpenRouter временно недоступен. Попробуйте позже.';
+        errorText = error.message || 'Сервис OpenRouter временно недоступен.';
+        errorText += `\n\nПопробуйте позже или проверьте статус сервиса на openrouter.ai`;
       } else if (error.message?.includes('Сессия истекла') || error.message?.includes('AUTH_REQUIRED') || error.code === 'AUTH_REQUIRED') {
-        errorText = 'Сессия истекла. Пожалуйста, перезагрузите страницу и войдите заново.';
+        errorText = 'Сессия истекла.\n\nПожалуйста, перезагрузите страницу и войдите заново.';
       } else if (error.message) {
         errorText = error.message;
         if (error.details) {
           errorText += `\n\nДетали: ${error.details}`;
         }
+        errorText += `\n\n💡 Используйте кнопку "Проверить подключение" (⚙️) для диагностики проблемы.`;
       }
 
       const errorMsg: ChatMessage = {
@@ -457,28 +507,61 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
         debugUrl = "/api/debug";
       }
 
-      console.log("[Diagnostics] Checking connection:", debugUrl);
+      console.log("[Diagnostics] Starting connection check:", {
+        url: debugUrl,
+        hostname: window.location.hostname,
+        origin: window.location.origin
+      });
+      
       const response = await fetch(debugUrl, {
         method: "GET",
         signal: AbortSignal.timeout(10000) // 10 секунд timeout
       });
 
+      console.log("[Diagnostics] Response received:", {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
+      });
+
       if (response.ok) {
         const data = await response.json();
         setDiagnosticInfo(data);
-        console.log("[Diagnostics] Connection check result:", data);
+        console.log("[Diagnostics] Connection check completed:", {
+          status: data.status,
+          hasOpenRouter: !!data.openRouter,
+          openRouterAvailable: data.openRouter?.available,
+          healthIssues: data.health?.issues?.length || 0
+        });
       } else {
         const errorText = await response.text().catch(() => 'Unknown error');
+        console.error("[Diagnostics] Error response:", {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        });
         setDiagnosticInfo({
           status: 'error',
-          error: `HTTP ${response.status}: ${errorText}`
+          error: `HTTP ${response.status}: ${errorText}`,
+          health: {
+            overall: 'error',
+            issues: [`Диагностический endpoint вернул ошибку ${response.status}`]
+          }
         });
       }
     } catch (error: any) {
-      console.error("[Diagnostics] Connection check failed:", error);
+      console.error("[Diagnostics] Connection check failed:", {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
       setDiagnosticInfo({
         status: 'error',
-        error: error.message || 'Не удалось проверить подключение'
+        error: error.message || 'Не удалось проверить подключение',
+        health: {
+          overall: 'error',
+          issues: ['Не удалось подключиться к диагностическому endpoint']
+        }
       });
     } finally {
       setIsCheckingConnection(false);

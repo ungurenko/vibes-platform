@@ -195,6 +195,12 @@ export default async function handler(req, res) {
 
     console.log(`[API] [${requestId}] OpenRouter API Key found (length: ${apiKey.length})`);
     console.log(`[API] [${requestId}] Preparing OpenRouter API request`);
+    console.log(`[API] [${requestId}] Environment check:`, {
+      nodeEnv: process.env.NODE_ENV,
+      vercelEnv: process.env.VERCEL_ENV,
+      isVercel: process.env.VERCEL === '1',
+      vercelUrl: process.env.VERCEL_URL || 'not set'
+    });
 
     const openRouterUrl = "https://openrouter.ai/api/v1/chat/completions";
     const requestPayload = {
@@ -205,10 +211,12 @@ export default async function handler(req, res) {
     console.log(`[API] [${requestId}] Sending request to OpenRouter:`, {
       url: openRouterUrl,
       model: requestPayload.model,
-      messagesCount: requestPayload.messages.length
+      messagesCount: requestPayload.messages.length,
+      totalMessagesLength: JSON.stringify(requestPayload.messages).length
     });
 
     let response;
+    const fetchStartTime = Date.now();
     try {
       response = await fetch(openRouterUrl, {
         method: "POST",
@@ -221,7 +229,14 @@ export default async function handler(req, res) {
         body: JSON.stringify(requestPayload)
       });
 
-      console.log(`[API] [${requestId}] OpenRouter response status: ${response.status} ${response.statusText}`);
+      const fetchDuration = Date.now() - fetchStartTime;
+      console.log(`[API] [${requestId}] OpenRouter response received:`, {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        duration: `${fetchDuration}ms`,
+        headers: Object.fromEntries(response.headers.entries())
+      });
     } catch (fetchError) {
       console.error(`[API] [${requestId}] Failed to fetch from OpenRouter:`, {
         name: fetchError.name,
@@ -280,7 +295,11 @@ export default async function handler(req, res) {
     try {
       data = await response.json();
       console.log(`[API] [${requestId}] OpenRouter response parsed successfully`);
-      console.log(`[API] [${requestId}] Response has ${data.choices?.length || 0} choices`);
+      console.log(`[API] [${requestId}] Response details:`, {
+        choicesCount: data.choices?.length || 0,
+        hasUsage: !!data.usage,
+        model: data.model || 'not specified'
+      });
       return res.status(200).json(data);
     } catch (parseError) {
       console.error(`[API] [${requestId}] Failed to parse OpenRouter response:`, parseError);
