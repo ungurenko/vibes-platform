@@ -356,14 +356,47 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
     const tokenType = typeof accessToken;
     const tokenLength = accessToken ? (typeof accessToken === 'string' ? accessToken.length : JSON.stringify(accessToken).length) : 0;
     
-    console.log("[Session Debug] Token extraction:", {
+    // Детальное исследование токена
+    let tokenAnalysis: any = {
       tokenFound: !!accessToken,
       tokenType,
       tokenLength,
-      isString: typeof accessToken === 'string',
-      tokenPreview: accessToken && typeof accessToken === 'string' ? accessToken.substring(0, 50) + '...' : 'not a string',
-      sessionPreview: JSON.stringify(session).substring(0, 200) + '...'
-    });
+      isString: typeof accessToken === 'string'
+    };
+    
+    if (accessToken && typeof accessToken === 'string') {
+      tokenAnalysis.firstChars = accessToken.substring(0, 100);
+      tokenAnalysis.lastChars = accessToken.length > 100 ? accessToken.substring(accessToken.length - 100) : accessToken;
+      tokenAnalysis.charCount = accessToken.length;
+      
+      // Проверка на повторяющиеся паттерны
+      const firstPart = accessToken.substring(0, Math.min(1000, accessToken.length));
+      const middlePart = accessToken.substring(Math.floor(accessToken.length / 2), Math.floor(accessToken.length / 2) + 1000);
+      tokenAnalysis.hasRepeatingPattern = firstPart === middlePart;
+      
+      // Проверка на дублирование (первые 1000 символов повторяются)
+      if (accessToken.length > 2000) {
+        const first1000 = accessToken.substring(0, 1000);
+        const second1000 = accessToken.substring(1000, 2000);
+        tokenAnalysis.isDuplicated = first1000 === second1000;
+        tokenAnalysis.duplicationCount = tokenAnalysis.isDuplicated ? Math.floor(accessToken.length / 1000) : 1;
+      }
+      
+      // Проверка структуры JWT (должен содержать 2 точки)
+      const dotCount = (accessToken.match(/\./g) || []).length;
+      tokenAnalysis.isValidJWTStructure = dotCount === 2;
+      tokenAnalysis.dotCount = dotCount;
+      
+      // Проверка на наличие JSON в токене (может быть сериализованный объект)
+      try {
+        JSON.parse(accessToken);
+        tokenAnalysis.isJSON = true;
+      } catch {
+        tokenAnalysis.isJSON = false;
+      }
+    }
+    
+    console.log("[Session Debug] Token extraction and analysis:", tokenAnalysis);
     
     // Предупреждение если токен слишком большой (больше 10KB - это ошибка)
     if (tokenLength > 10000) {
@@ -397,24 +430,44 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
         console.error("[API] Token is too large, refusing to send. This is likely a bug.");
         console.error("[API] Attempting to clear corrupted session data...");
         
-        // Пытаемся очистить localStorage от некорректных данных
+        // Принудительная очистка всех данных Supabase из localStorage
         try {
+          console.log("[API] Starting aggressive cleanup of Supabase data...");
+          
           // Очищаем все ключи связанные с Supabase auth
           const keysToRemove: string[] = [];
           for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
-            if (key && (key.includes('sb-') || key.includes('supabase'))) {
+            if (key && (
+              key.includes('sb-') || 
+              key.includes('supabase') || 
+              key.includes('auth-token') ||
+              key.startsWith('sb_')
+            )) {
               keysToRemove.push(key);
             }
           }
+          
+          console.log(`[API] Found ${keysToRemove.length} Supabase-related keys to remove`);
+          
           keysToRemove.forEach(key => {
             try {
               localStorage.removeItem(key);
-              console.log(`[API] Removed corrupted key: ${key}`);
+              console.log(`[API] Removed key: ${key}`);
             } catch (e) {
               console.error(`[API] Failed to remove key ${key}:`, e);
             }
           });
+          
+          // Также пытаемся выйти из сессии Supabase
+          try {
+            await supabase.auth.signOut();
+            console.log("[API] Signed out from Supabase");
+          } catch (signOutError) {
+            console.error("[API] Failed to sign out from Supabase:", signOutError);
+          }
+          
+          console.log("[API] Cleanup completed");
         } catch (cleanupError) {
           console.error("[API] Failed to cleanup localStorage:", cleanupError);
         }
@@ -422,10 +475,18 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
         const errorMsg: ChatMessage = {
           id: Date.now().toString(),
           role: 'assistant',
-          text: 'Обнаружена проблема с сессией. Пожалуйста, перезагрузите страницу и войдите заново.\n\nСистема автоматически очистила поврежденные данные авторизации.',
+          text: '⚠️ **Обнаружена критическая проблема с сессией**\n\nСистема автоматически очистила поврежденные данные авторизации из localStorage.\n\n**Что нужно сделать:**\n1. Нажмите кнопку "Перезагрузить страницу" ниже или обновите страницу вручную (F5 или Cmd+R)\n2. После перезагрузки войдите в систему заново\n\n**Причина:** Обнаружен некорректно большой токен аутентификации (возможно, поврежденные данные). Очистка localStorage должна решить проблему.\n\n🔧 Если проблема повторится, попробуйте очистить кэш браузера.',
           timestamp: new Date()
         };
         setMessages(prev => [...prev, errorMsg]);
+        
+        // Добавляем небольшую задержку перед показом кнопки перезагрузки
+        setTimeout(() => {
+          if (window.confirm('Данные авторизации очищены. Перезагрузить страницу сейчас?')) {
+            window.location.reload();
+          }
+        }, 1000);
+        
         setIsTyping(false);
         return;
       }

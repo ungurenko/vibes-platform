@@ -50,7 +50,25 @@ const STORAGE_PRIORITIES = {
     ]
 };
 
-const cleanupStorage = (aggressive = false) => {
+// Функция для оценки размера данных в localStorage
+const estimateStorageSize = (): { used: number; available: number } => {
+    let total = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key) {
+            const value = localStorage.getItem(key) || '';
+            total += key.length + value.length;
+        }
+    }
+    // Обычно localStorage имеет лимит около 5-10MB, но это зависит от браузера
+    const estimatedLimit = 5 * 1024 * 1024; // 5MB как консервативная оценка
+    return {
+        used: total,
+        available: estimatedLimit - total
+    };
+};
+
+const cleanupStorage = (aggressive = false, critical = false) => {
     const keysToRemove: string[] = [];
     const allKeys: string[] = [];
     
@@ -62,7 +80,9 @@ const cleanupStorage = (aggressive = false) => {
         }
     }
     
-    console.log(`[Storage] Starting cleanup. Total keys: ${allKeys.length}, aggressive: ${aggressive}`);
+    const storageInfo = estimateStorageSize();
+    console.log(`[Storage] Starting cleanup. Total keys: ${allKeys.length}, aggressive: ${aggressive}, critical: ${critical}`);
+    console.log(`[Storage] Estimated storage: ${(storageInfo.used / 1024).toFixed(2)}KB used, ${(storageInfo.available / 1024).toFixed(2)}KB available`);
     
     // Функция для проверки, можно ли удалить ключ
     const canRemove = (key: string): boolean => {
@@ -73,52 +93,66 @@ const cleanupStorage = (aggressive = false) => {
         return true;
     };
     
-    // Удаляем по приоритетам
-    // 1. Сначала удаляем LOW приоритет (история чата и т.д.)
-    STORAGE_PRIORITIES.LOW.forEach(prefix => {
+    // Критическая очистка - удаляем ВСЕ кроме auth токенов
+    if (critical) {
+        console.log(`[Storage] CRITICAL MODE: Removing ALL non-auth keys`);
         allKeys.forEach(k => {
-            if (canRemove(k) && k.includes(prefix) && !keysToRemove.includes(k)) {
+            if (canRemove(k)) {
                 keysToRemove.push(k);
             }
         });
-    });
-    
-    // 2. Если агрессивная очистка или все еще нужно место, удаляем MEDIUM
-    if (aggressive || keysToRemove.length === 0) {
-        STORAGE_PRIORITIES.MEDIUM.forEach(prefix => {
+    } else {
+        // Удаляем по приоритетам
+        // 1. Сначала удаляем LOW приоритет (история чата и т.д.)
+        STORAGE_PRIORITIES.LOW.forEach(prefix => {
             allKeys.forEach(k => {
                 if (canRemove(k) && k.includes(prefix) && !keysToRemove.includes(k)) {
                     keysToRemove.push(k);
                 }
             });
         });
-    }
-    
-    // 3. Если агрессивная очистка, удаляем все остальное (кроме защищенных)
-    if (aggressive) {
-        allKeys.forEach(k => {
-            if (canRemove(k) && !keysToRemove.includes(k)) {
-                // Проверяем, что это не высокоприоритетные данные
-                const isHighPriority = STORAGE_PRIORITIES.HIGH.some(prefix => k.includes(prefix));
-                if (!isHighPriority) {
-                    keysToRemove.push(k);
+        
+        // 2. Если агрессивная очистка или все еще нужно место, удаляем MEDIUM
+        if (aggressive || keysToRemove.length === 0) {
+            STORAGE_PRIORITIES.MEDIUM.forEach(prefix => {
+                allKeys.forEach(k => {
+                    if (canRemove(k) && k.includes(prefix) && !keysToRemove.includes(k)) {
+                        keysToRemove.push(k);
+                    }
+                });
+            });
+        }
+        
+        // 3. Если агрессивная очистка, удаляем все остальное (кроме защищенных)
+        if (aggressive) {
+            allKeys.forEach(k => {
+                if (canRemove(k) && !keysToRemove.includes(k)) {
+                    // Проверяем, что это не высокоприоритетные данные
+                    const isHighPriority = STORAGE_PRIORITIES.HIGH.some(prefix => k.includes(prefix));
+                    if (!isHighPriority) {
+                        keysToRemove.push(k);
+                    }
                 }
-            }
-        });
+            });
+        }
     }
     
     // Удаляем ключи
     let removedCount = 0;
+    let freedSpace = 0;
     keysToRemove.forEach(k => {
         try {
+            const value = localStorage.getItem(k) || '';
+            const size = k.length + value.length;
             localStorage.removeItem(k);
             removedCount++;
+            freedSpace += size;
         } catch (e) {
             console.warn(`[Storage] Failed to remove key: ${k}`, e);
         }
     });
     
-    console.log(`[Storage] Cleared ${removedCount} items from localStorage to free space`);
+    console.log(`[Storage] Cleared ${removedCount} items, freed approximately ${(freedSpace / 1024).toFixed(2)}KB`);
     
     // Пытаемся оценить освобожденное место
     try {
@@ -131,7 +165,7 @@ const cleanupStorage = (aggressive = false) => {
         console.error(`[Storage] Storage still full after cleanup!`, e);
     }
     
-    return removedCount;
+    return { removedCount, freedSpace };
 };
 
 const customStorage = {
@@ -144,50 +178,104 @@ const customStorage = {
         }
     },
     setItem: (key: string, value: string): Promise<void> => {
+        // Проверяем размер данных перед сохранением
+        const dataSize = key.length + value.length;
+        const isAuthKey = PROTECTED_KEYS.some(pk => key.includes(pk));
+        
+        // Защита от огромных токенов (нормальный JWT токен ~200-500 символов, максимум 10KB)
+        if (isAuthKey && dataSize > 10 * 1024) { // Если auth токен больше 10KB
+            console.error(`[Storage] CRITICAL: Auth token is abnormally large: ${key} is ${(dataSize / 1024).toFixed(2)}KB`);
+            console.error(`[Storage] Normal JWT tokens are ~200-500 characters. This is likely corrupted data.`);
+            console.error(`[Storage] Token preview (first 200 chars): ${value.substring(0, 200)}`);
+            
+            // Если токен больше 100KB, это точно ошибка - не сохраняем его
+            if (dataSize > 100 * 1024) {
+                console.error(`[Storage] Refusing to save token larger than 100KB. This is definitely corrupted.`);
+                console.error(`[Storage] Clearing all Supabase data to prevent localStorage corruption...`);
+                
+                // Очищаем все данные Supabase
+                try {
+                    const allKeys: string[] = [];
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const k = localStorage.key(i);
+                        if (k && (k.includes('sb-') || k.includes('supabase') || k.startsWith('sb_'))) {
+                            allKeys.push(k);
+                        }
+                    }
+                    allKeys.forEach(k => {
+                        try {
+                            localStorage.removeItem(k);
+                            console.log(`[Storage] Removed corrupted key: ${k}`);
+                        } catch (e) {
+                            console.error(`[Storage] Failed to remove key ${k}:`, e);
+                        }
+                    });
+                    console.error(`[Storage] Cleared ${allKeys.length} Supabase keys. User will need to re-login.`);
+                } catch (cleanupError) {
+                    console.error(`[Storage] Failed to cleanup:`, cleanupError);
+                }
+                
+                // Не сохраняем токен - это предотвратит переполнение localStorage
+                return Promise.resolve();
+            }
+        }
+        
+        if (dataSize > 100 * 1024) { // Если данные больше 100KB
+            console.warn(`[Storage] Large data detected: ${key} is ${(dataSize / 1024).toFixed(2)}KB`);
+            if (!isAuthKey) {
+                console.warn(`[Storage] Consider reducing size of ${key}`);
+            }
+        }
+        
         try {
             localStorage.setItem(key, value);
         } catch (e: any) {
             // If it's a quota error, aggressively clear non-auth data
             if (e.name === 'QuotaExceededError' || e.message?.includes('quota')) {
-                console.warn(`[Storage] Quota exceeded when setting ${key}, starting cleanup...`);
+                console.warn(`[Storage] Quota exceeded when setting ${key} (${(dataSize / 1024).toFixed(2)}KB), starting cleanup...`);
                 
                 // Сначала обычная очистка
-                const removedCount = cleanupStorage(false);
+                const cleanupResult = cleanupStorage(false, false);
                 
                 // Если это критический ключ авторизации, делаем агрессивную очистку
-                const isAuthKey = PROTECTED_KEYS.some(pk => key.includes(pk));
                 if (isAuthKey) {
                     console.warn(`[Storage] Auth key storage failed, performing aggressive cleanup...`);
-                    cleanupStorage(true);
-                }
-
-                // Try again after cleanup
-                try {
-                    localStorage.setItem(key, value);
-                    console.log(`[Storage] Successfully saved ${key} after cleanup`);
-                } catch (retryError: any) {
-                    console.error(`[Storage] Storage still full after cleanup - ${key} may fail`, retryError);
+                    cleanupStorage(true, false);
                     
-                    // Если это auth ключ и все еще не работает, это критично
-                    if (isAuthKey) {
-                        console.error(`[Storage] CRITICAL: Cannot save auth key ${key}. Auth may fail!`);
-                        // Пытаемся удалить еще больше данных
+                    // Если все еще не работает, делаем критическую очистку
+                    try {
+                        localStorage.setItem(key, value);
+                        console.log(`[Storage] Successfully saved ${key} after aggressive cleanup`);
+                    } catch (retryError: any) {
+                        console.error(`[Storage] Storage still full after aggressive cleanup - ${key} may fail`, retryError);
+                        console.warn(`[Storage] Performing CRITICAL cleanup - removing ALL non-auth data`);
+                        
+                        // Критическая очистка - удаляем ВСЕ кроме auth токенов
+                        cleanupStorage(true, true);
+                        
+                        // Пробуем еще раз
                         try {
-                            // Удаляем всю историю чата принудительно
-                            const chatKeys = ['vibes_chat_history', 'vibes_ai_system_instruction'];
-                            chatKeys.forEach(ck => {
-                                try {
-                                    localStorage.removeItem(ck);
-                                    console.log(`[Storage] Force removed ${ck}`);
-                                } catch {}
-                            });
-                            
-                            // Пробуем еще раз
                             localStorage.setItem(key, value);
-                            console.log(`[Storage] Successfully saved ${key} after force cleanup`);
-                        } catch (finalError) {
-                            console.error(`[Storage] FINAL ERROR: Cannot save ${key} even after force cleanup`, finalError);
+                            console.log(`[Storage] Successfully saved ${key} after CRITICAL cleanup`);
+                        } catch (criticalError: any) {
+                            console.error(`[Storage] CRITICAL: Cannot save auth key ${key} even after critical cleanup!`, criticalError);
+                            console.error(`[Storage] Auth token size: ${(dataSize / 1024).toFixed(2)}KB`);
+                            console.error(`[Storage] This may cause authentication to fail!`);
+                            
+                            // Последняя попытка - проверяем, может быть сам токен слишком большой
+                            if (dataSize > 500 * 1024) { // Если токен больше 500KB
+                                console.error(`[Storage] WARNING: Auth token is extremely large (${(dataSize / 1024).toFixed(2)}KB). This is unusual.`);
+                            }
                         }
+                    }
+                } else {
+                    // Для не-auth ключей просто пробуем еще раз после очистки
+                    try {
+                        localStorage.setItem(key, value);
+                        console.log(`[Storage] Successfully saved ${key} after cleanup`);
+                    } catch (retryError: any) {
+                        console.error(`[Storage] Storage still full after cleanup - ${key} may fail`, retryError);
+                        // Для не-auth ключей не критично, просто логируем
                     }
                 }
             } else {
