@@ -291,6 +291,21 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
       return;
     }
 
+    // Детальное логирование структуры сессии для диагностики
+    console.log("[Session Debug] Session structure:", {
+      hasSession: !!session,
+      sessionType: typeof session,
+      sessionKeys: session ? Object.keys(session) : [],
+      hasAccessToken: 'access_token' in (session || {}),
+      sessionStructure: session ? {
+        access_token_type: typeof (session as any).access_token,
+        access_token_exists: 'access_token' in session,
+        user_type: typeof (session as any).user,
+        user_exists: 'user' in (session || {}),
+        allKeys: Object.keys(session),
+      } : null
+    });
+
     playSound('success'); // Play sound for sent message
 
     const newUserMsg: ChatMessage = {
@@ -307,11 +322,48 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
     // Reset height
     if (inputRef.current) inputRef.current.style.height = 'auto';
 
-    const accessToken = session.access_token;
+    // Извлекаем токен - используем стандартную структуру Supabase
+    // Supabase Session имеет структуру: { access_token: string, refresh_token: string, user: {...}, ... }
+    let accessToken: string | undefined;
+    
+    try {
+      // Стандартный способ - session.access_token
+      if (session && typeof session === 'object' && 'access_token' in session) {
+        const tokenValue = (session as any).access_token;
+        
+        // Проверяем что это строка, а не объект или что-то еще
+        if (typeof tokenValue === 'string') {
+          accessToken = tokenValue;
+        } else {
+          console.error("[Session Debug] access_token is not a string!", {
+            type: typeof tokenValue,
+            value: tokenValue,
+            stringified: JSON.stringify(tokenValue).substring(0, 200)
+          });
+          // Если это объект, возможно это ошибка - пытаемся извлечь строку из него
+          if (tokenValue && typeof tokenValue === 'object') {
+            console.error("[Session Debug] access_token is an object, this is wrong!");
+          }
+        }
+      } else {
+        console.error("[Session Debug] Session does not have access_token property or is not an object!");
+      }
+    } catch (error) {
+      console.error("[Session Debug] Error extracting token:", error);
+    }
 
     // Диагностика: проверяем тип и размер токена
     const tokenType = typeof accessToken;
     const tokenLength = accessToken ? (typeof accessToken === 'string' ? accessToken.length : JSON.stringify(accessToken).length) : 0;
+    
+    console.log("[Session Debug] Token extraction:", {
+      tokenFound: !!accessToken,
+      tokenType,
+      tokenLength,
+      isString: typeof accessToken === 'string',
+      tokenPreview: accessToken && typeof accessToken === 'string' ? accessToken.substring(0, 50) + '...' : 'not a string',
+      sessionPreview: JSON.stringify(session).substring(0, 200) + '...'
+    });
     
     // Предупреждение если токен слишком большой (больше 10KB - это ошибка)
     if (tokenLength > 10000) {
@@ -319,7 +371,9 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
         tokenType,
         tokenLength,
         isString: typeof accessToken === 'string',
-        tokenPreview: typeof accessToken === 'string' ? accessToken.substring(0, 100) : 'not a string'
+        tokenPreview: typeof accessToken === 'string' ? accessToken.substring(0, 100) : 'not a string',
+        sessionKeys: Object.keys(session),
+        fullSessionPreview: JSON.stringify(session).substring(0, 500)
       });
     }
 
@@ -338,13 +392,37 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
 
     // Добавляем токен авторизации если есть и это строка
     if (accessToken && typeof accessToken === 'string') {
-      // Проверяем, что токен не слишком большой (нормальный JWT ~200-500 символов)
-      if (accessToken.length > 10000) {
+      // Проверяем, что токен не слишком большой (нормальный JWT ~200-500 символов, максимум 5KB для безопасности)
+      if (accessToken.length > 5000) {
         console.error("[API] Token is too large, refusing to send. This is likely a bug.");
+        console.error("[API] Attempting to clear corrupted session data...");
+        
+        // Пытаемся очистить localStorage от некорректных данных
+        try {
+          // Очищаем все ключи связанные с Supabase auth
+          const keysToRemove: string[] = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (key.includes('sb-') || key.includes('supabase'))) {
+              keysToRemove.push(key);
+            }
+          }
+          keysToRemove.forEach(key => {
+            try {
+              localStorage.removeItem(key);
+              console.log(`[API] Removed corrupted key: ${key}`);
+            } catch (e) {
+              console.error(`[API] Failed to remove key ${key}:`, e);
+            }
+          });
+        } catch (cleanupError) {
+          console.error("[API] Failed to cleanup localStorage:", cleanupError);
+        }
+        
         const errorMsg: ChatMessage = {
           id: Date.now().toString(),
           role: 'assistant',
-          text: 'Ошибка аутентификации: обнаружен некорректный токен. Пожалуйста, перезагрузите страницу и войдите заново.',
+          text: 'Обнаружена проблема с сессией. Пожалуйста, перезагрузите страницу и войдите заново.\n\nСистема автоматически очистила поврежденные данные авторизации.',
           timestamp: new Date()
         };
         setMessages(prev => [...prev, errorMsg]);
@@ -352,8 +430,28 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
         return;
       }
       headers["Authorization"] = `Bearer ${accessToken}`;
-    } else if (accessToken) {
+    } else if (!accessToken) {
+      console.error("[API] accessToken not found in session!");
+      const errorMsg: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        text: 'Ошибка аутентификации: токен не найден. Пожалуйста, перезагрузите страницу и войдите заново.',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMsg]);
+      setIsTyping(false);
+      return;
+    } else {
       console.error("[API] accessToken is not a string!", { tokenType, accessToken });
+      const errorMsg: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        text: 'Ошибка аутентификации: некорректный формат токена. Пожалуйста, перезагрузите страницу и войдите заново.',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMsg]);
+      setIsTyping(false);
+      return;
     }
 
     const requestBody = {
