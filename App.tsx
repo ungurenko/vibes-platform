@@ -506,7 +506,7 @@ const AppContent: React.FC = () => {
       case 'styles': return <StyleLibrary styles={styles} />;
       case 'prompts': return <PromptBase prompts={prompts} categories={promptCategories} />;
       case 'glossary': return <Glossary glossary={glossary} onNavigate={setActiveTab} onAskAI={handleAskAI} />;
-      case 'assistant': return <Assistant initialMessage={assistantInitialMessage} onMessageHandled={() => setAssistantInitialMessage(null)} />;
+      case 'assistant': return <Assistant initialMessage={assistantInitialMessage} onMessageHandled={() => setAssistantInitialMessage(null)} session={session} />;
       case 'profile': return currentUser ? <UserProfile user={currentUser} /> : <Home stages={stages} onNavigate={setActiveTab} />;
       
       // Admin Views

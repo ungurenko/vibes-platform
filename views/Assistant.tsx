@@ -140,9 +140,10 @@ const FormattedText: React.FC<{ text: string }> = ({ text }) => {
 interface AssistantProps {
     initialMessage?: string | null;
     onMessageHandled?: () => void;
+    session?: { access_token: string; user: { id: string } } | null;
 }
 
-const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled }) => {
+const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled, session: sessionProp }) => {
   const { playSound } = useSound();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -255,6 +256,24 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled 
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
 
+    // Используем сессию из props (от App.tsx) или пробуем получить из Supabase
+    let session = sessionProp;
+    if (!session) {
+      const { data } = await supabase.auth.getSession();
+      session = data.session;
+    }
+
+    if (!session) {
+      const errorMsg: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        text: 'Вы не авторизованы. Пожалуйста, перезагрузите страницу и войдите в систему.',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMsg]);
+      return;
+    }
+
     playSound('success'); // Play sound for sent message
 
     const newUserMsg: ChatMessage = {
@@ -267,7 +286,7 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled 
     setMessages(prev => [...prev, newUserMsg]);
     setInputValue('');
     setIsTyping(true);
-    
+
     // Reset height
     if (inputRef.current) inputRef.current.style.height = 'auto';
 
@@ -276,9 +295,7 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled 
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 секунд timeout
 
     try {
-      // Получаем токен авторизации
-      const { data: { session } } = await supabase.auth.getSession();
-      const accessToken = session?.access_token;
+      const accessToken = session.access_token;
 
       const apiMessages = [
         { role: 'system', content: systemInstruction },
