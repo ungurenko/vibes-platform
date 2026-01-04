@@ -294,6 +294,11 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 секунд timeout
 
+    // Use environment variable or fallback to relative path
+    // В dev режиме используйте deployed Vercel URL через VITE_API_CHAT_URL
+    const envApiUrl = import.meta.env.VITE_API_CHAT_URL?.trim();
+    const apiUrl = envApiUrl || "/api/chat";
+
     try {
       const accessToken = session.access_token;
 
@@ -320,14 +325,17 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
         "messages": apiMessages
       };
 
-      // Use environment variable or fallback to current origin
-      // В dev режиме используйте deployed Vercel URL через VITE_API_CHAT_URL
-      const apiUrl = import.meta.env.VITE_API_CHAT_URL || window.location.origin + "/api/chat";
+      // Предупреждение для разработчика при локальной разработке
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        if (!envApiUrl) {
+          console.warn("⚠️ API функции работают только на Vercel. Для локальной разработки используйте 'vercel dev' или установите VITE_API_CHAT_URL на deployed URL.");
+        }
+      }
 
       console.log("🔍 AI Assistant Debug:", {
         apiUrl,
-        envVarSet: !!import.meta.env.VITE_API_CHAT_URL,
-        envValue: import.meta.env.VITE_API_CHAT_URL,
+        envVarSet: !!envApiUrl,
+        envValue: envApiUrl,
         origin: window.location.origin,
         headersCount: Object.keys(headers).length,
         hasAuth: !!headers["Authorization"],
@@ -339,9 +347,7 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
         method: "POST",
         headers,
         body: JSON.stringify(requestBody),
-        signal: controller.signal,
-        mode: 'cors',
-        credentials: 'same-origin'
+        signal: controller.signal
       });
 
       clearTimeout(timeoutId);
@@ -375,8 +381,14 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
       let errorText = 'Произошла ошибка соединения с нейросетью. Проверь интернет или API ключ.';
       if (error.name === 'AbortError') {
         errorText = 'Запрос занял слишком много времени. Попробуй ещё раз или упрости вопрос.';
-      } else if (error.name === 'TypeError' && error.message?.includes('Failed to fetch')) {
-        errorText = `Ошибка подключения к API (${apiUrl}). Проверьте настройки Vercel или переменные окружения.`;
+      } else if (error.name === 'TypeError' && (error.message?.includes('Failed to fetch') || error.message?.includes('Load failed'))) {
+        // Обработка ошибок подключения (включая Safari "Load failed")
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        if (isLocalhost && !envApiUrl) {
+          errorText = 'API функции недоступны локально. Используйте "vercel dev" для локальной разработки или установите VITE_API_CHAT_URL на deployed URL.';
+        } else {
+          errorText = `Ошибка подключения к API. Проверьте настройки Vercel или переменные окружения.`;
+        }
       } else if (error.message?.includes('Сессия истекла') || error.message?.includes('AUTH_REQUIRED')) {
         // Clear storage and suggest re-login
         cleanupStorage();
