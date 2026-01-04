@@ -320,10 +320,15 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
         "messages": apiMessages
       };
 
-      // Use absolute URL to avoid Safari issues
-      const apiUrl = window.location.origin + "/api/chat";
+      // Use environment variable or fallback to current origin
+      // В dev режиме используйте deployed Vercel URL через VITE_API_CHAT_URL
+      const apiUrl = import.meta.env.VITE_API_CHAT_URL || window.location.origin + "/api/chat";
 
-      console.log("Sending request to", apiUrl, {
+      console.log("🔍 AI Assistant Debug:", {
+        apiUrl,
+        envVarSet: !!import.meta.env.VITE_API_CHAT_URL,
+        envValue: import.meta.env.VITE_API_CHAT_URL,
+        origin: window.location.origin,
         headersCount: Object.keys(headers).length,
         hasAuth: !!headers["Authorization"],
         messagesCount: apiMessages.length,
@@ -360,15 +365,18 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
 
     } catch (error: any) {
       clearTimeout(timeoutId);
-      console.error("OpenRouter Error:", {
+      console.error("❌ OpenRouter Error:", {
         name: error.name,
         message: error.message,
-        stack: error.stack
+        stack: error.stack,
+        fullError: error
       });
 
       let errorText = 'Произошла ошибка соединения с нейросетью. Проверь интернет или API ключ.';
       if (error.name === 'AbortError') {
         errorText = 'Запрос занял слишком много времени. Попробуй ещё раз или упрости вопрос.';
+      } else if (error.name === 'TypeError' && error.message?.includes('Failed to fetch')) {
+        errorText = `Ошибка подключения к API (${apiUrl}). Проверьте настройки Vercel или переменные окружения.`;
       } else if (error.message?.includes('Сессия истекла') || error.message?.includes('AUTH_REQUIRED')) {
         // Clear storage and suggest re-login
         cleanupStorage();
