@@ -218,21 +218,18 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled 
       }
   }, [initialMessage]);
 
-  // Persist to Supabase when messages change
+  // Persist to Supabase when messages change (no localStorage to avoid quota issues)
   useEffect(() => {
     const saveChat = async () => {
         if (!chatId || messages.length === 0) return;
-        
+
+        // Limit messages to last 100 to prevent DB bloat
+        const messagesToSave = messages.slice(-100);
+
         await supabase
             .from('chats')
-            .update({ messages, updated_at: new Date().toISOString() })
+            .update({ messages: messagesToSave, updated_at: new Date().toISOString() })
             .eq('id', chatId);
-        
-        try {
-            localStorage.setItem('vibes_chat_history', JSON.stringify(messages.slice(-50)));
-        } catch (e) {
-            console.warn("Local storage full, skipping chat save");
-        }
     };
 
     const timer = setTimeout(saveChat, 1000); // Debounce saves
@@ -365,14 +362,26 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled 
     }
   };
 
-  const handleClearChat = () => {
+  const handleClearChat = async () => {
     if (window.confirm('Очистить историю переписки?')) {
-        setMessages([{
+        const freshMessage: ChatMessage = {
             id: Date.now().toString(),
             role: 'assistant',
-            text: 'Чат очищен. Я готов к новым задачам! 🚀',
+            text: 'Чат очищен. Я готов к новым задачам!',
             timestamp: new Date()
-        }]);
+        };
+
+        setMessages([freshMessage]);
+
+        // Clear in database
+        if (chatId) {
+            await supabase
+                .from('chats')
+                .update({ messages: [freshMessage], updated_at: new Date().toISOString() })
+                .eq('id', chatId);
+        }
+
+        // Also clear any legacy localStorage data
         localStorage.removeItem('vibes_chat_history');
     }
   };
