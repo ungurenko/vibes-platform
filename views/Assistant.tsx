@@ -456,77 +456,146 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 секунд timeout
 
+    // Retry логика с экспоненциальной задержкой
+    const maxRetries = 3;
+
     // Use URL constructor to ensure Safari compatibility
     // This guarantees a valid absolute URL
     let apiUrl: string;
+    let apiUrlAlt: string | null = null; // Альтернативный URL для Safari
     try {
       const url = new URL("/api/chat", window.location.href);
       apiUrl = url.toString();
+      
+      // Альтернативный способ для Safari - используем origin напрямую
+      if (window.location.origin) {
+        apiUrlAlt = `${window.location.origin}/api/chat`;
+      }
+      
       console.log("[URL] Constructed URL:", {
         input: "/api/chat",
         base: window.location.href,
         result: apiUrl,
+        alt: apiUrlAlt,
         origin: window.location.origin,
         protocol: window.location.protocol,
         hostname: window.location.hostname
       });
     } catch (e) {
       console.error("[URL] Failed to construct URL:", e);
-      apiUrl = "/api/chat"; // Fallback to relative path
+      // Fallback варианты
+      if (window.location.origin) {
+        apiUrl = `${window.location.origin}/api/chat`;
+      } else {
+        apiUrl = "/api/chat"; // Последний fallback
+      }
     }
 
-    try {
-      const accessToken = session.access_token;
+    const accessToken = session.access_token;
 
-      const apiMessages = [
-        { role: 'system', content: systemInstruction },
-        ...messages.slice(-20).map(m => ({
-          role: m.role,
-          content: m.text
-        })),
-        { role: 'user', content: text }
-      ];
+    const apiMessages = [
+      { role: 'system', content: systemInstruction },
+      ...messages.slice(-20).map(m => ({
+        role: m.role,
+        content: m.text
+      })),
+      { role: 'user', content: text }
+    ];
 
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json"
-      };
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json"
+    };
 
-      // Добавляем токен авторизации если есть
-      if (accessToken) {
-        headers["Authorization"] = `Bearer ${accessToken}`;
+    // Добавляем токен авторизации если есть
+    if (accessToken) {
+      headers["Authorization"] = `Bearer ${accessToken}`;
+    }
+
+    const requestBody = {
+      "model": "xiaomi/mimo-v2-flash:free",
+      "messages": apiMessages
+    };
+
+    // Предупреждение для разработчика при локальной разработке
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        console.warn("⚠️ API функции работают только на Vercel. Для локальной разработки используйте 'vercel dev'.");
+    }
+
+    console.log("🔍 AI Assistant Debug:", {
+      apiUrl,
+      apiUrlAlt,
+      apiUrlType: typeof apiUrl,
+      apiUrlLength: apiUrl.length,
+      origin: window.location.origin,
+      locationHref: window.location.href,
+      headersCount: Object.keys(headers).length,
+      hasAuth: !!headers["Authorization"],
+      messagesCount: apiMessages.length,
+      bodySize: JSON.stringify(requestBody).length
+    });
+    let lastError: any = null;
+    let response: Response | null = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        // Выбираем URL для попытки
+        const urlToUse = (attempt > 0 && apiUrlAlt) ? apiUrlAlt : apiUrl;
+        
+        if (attempt > 0) {
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Экспоненциальная задержка, макс 5 сек
+          console.log(`[API] Retry attempt ${attempt}/${maxRetries} after ${delay}ms delay...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+
+        console.log(`[API] Sending request to: ${urlToUse} (attempt ${attempt + 1}/${maxRetries + 1})`);
+        
+        // Создаем новый controller для каждой попытки
+        const retryController = new AbortController();
+        const retryTimeoutId = setTimeout(() => retryController.abort(), 30000);
+        
+        response = await fetch(urlToUse, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(requestBody),
+          signal: retryController.signal
+        });
+
+        clearTimeout(retryTimeoutId);
+        clearTimeout(timeoutId);
+
+        // Если успешно, выходим из цикла
+        break;
+      } catch (error: any) {
+        lastError = error;
+        console.warn(`[API] Attempt ${attempt + 1} failed:`, {
+          name: error.name,
+          message: error.message,
+          isLoadFailed: error.message?.includes('Load failed') || error.message?.includes('Failed to fetch'),
+          isAbort: error.name === 'AbortError'
+        });
+
+        // Если это AbortError (timeout), не ретраим
+        if (error.name === 'AbortError') {
+          console.error("[API] Request timeout, not retrying");
+          break;
+        }
+
+        // Если это последняя попытка, выбрасываем ошибку
+        if (attempt === maxRetries) {
+          console.error("[API] All retry attempts exhausted");
+          throw error;
+        }
+
+        // Для "Load failed" и "Failed to fetch" пробуем альтернативный URL на следующей попытке
+        if ((error.message?.includes('Load failed') || error.message?.includes('Failed to fetch')) && apiUrlAlt && attempt === 0) {
+          console.log("[API] Load failed detected, will try alternative URL on next attempt");
+        }
       }
+    }
 
-      const requestBody = {
-        "model": "xiaomi/mimo-v2-flash:free",
-        "messages": apiMessages
-      };
-
-      // Предупреждение для разработчика при локальной разработке
-      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-          console.warn("⚠️ API функции работают только на Vercel. Для локальной разработки используйте 'vercel dev'.");
-      }
-
-      console.log("🔍 AI Assistant Debug:", {
-        apiUrl,
-        apiUrlType: typeof apiUrl,
-        apiUrlLength: apiUrl.length,
-        origin: window.location.origin,
-        locationHref: window.location.href,
-        headersCount: Object.keys(headers).length,
-        hasAuth: !!headers["Authorization"],
-        messagesCount: apiMessages.length,
-        bodySize: JSON.stringify(requestBody).length
-      });
-
-      console.log("[API] Sending request to:", apiUrl);
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(requestBody),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
+    if (!response) {
+      throw lastError || new Error('Failed to get response after all retries');
+    }
 
       console.log("[API] Response status:", response.status, response.statusText);
 
@@ -588,9 +657,12 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
         if (isLocalhost) {
           errorText = 'API функции недоступны локально. Используйте "vercel dev" для локальной разработки.';
         } else {
-          errorText = `Ошибка подключения к API. Проверьте настройки Vercel или переменные окружения.`;
+          errorText = `Ошибка подключения к API после ${maxRetries + 1} попыток. Возможные причины:\n\n1. Проблемы с сетью или интернет-соединением\n2. API функция не развернута на Vercel\n3. Проблемы с CORS или настройками Vercel\n\nПопробуйте:\n- Обновить страницу\n- Проверить интернет-соединение\n- Проверить логи Vercel Functions`;
           showDetails = true;
         }
+      } else if (error.message === 'Failed to get response after all retries') {
+        errorText = `Не удалось подключиться к API после ${maxRetries + 1} попыток. Проверьте:\n\n1. Интернет-соединение\n2. Что API функция развернута на Vercel\n3. Логи Vercel Functions для деталей`;
+        showDetails = true;
       } else if (error.code === 'OPENROUTER_KEY_MISSING') {
         errorText = error.message || 'OpenRouter API Key не настроен на сервере.';
         if (error.details) {

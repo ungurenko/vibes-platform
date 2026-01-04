@@ -32,17 +32,106 @@ if (!isSupabaseConfigured) {
 // Keys that are critical for auth - never delete these
 const PROTECTED_KEYS = ['sb-', 'supabase.auth'];
 
-const cleanupStorage = () => {
+// Приоритеты удаления (от низкого к высокому приоритету сохранения)
+const STORAGE_PRIORITIES = {
+    // Самый низкий приоритет - удаляем первыми
+    LOW: [
+        'vibes_chat_history', // История чата (сохраняется в Supabase)
+        'vibes_ai_system_instruction', // Инструкции ИИ
+    ],
+    // Средний приоритет
+    MEDIUM: [
+        'vibes_sound_enabled',
+        'vibes_sound_volume',
+    ],
+    // Высокий приоритет - удаляем только если совсем нет места
+    HIGH: [
+        // Другие настройки приложения
+    ]
+};
+
+const cleanupStorage = (aggressive = false) => {
     const keysToRemove: string[] = [];
+    const allKeys: string[] = [];
+    
+    // Собираем все ключи
     for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k && !PROTECTED_KEYS.some(pk => k.includes(pk))) {
-            // Remove non-critical keys (chat history, theme, etc.)
-            keysToRemove.push(k);
+        if (k) {
+            allKeys.push(k);
         }
     }
-    keysToRemove.forEach(k => localStorage.removeItem(k));
-    console.log(`Cleared ${keysToRemove.length} items from localStorage to free space`);
+    
+    console.log(`[Storage] Starting cleanup. Total keys: ${allKeys.length}, aggressive: ${aggressive}`);
+    
+    // Функция для проверки, можно ли удалить ключ
+    const canRemove = (key: string): boolean => {
+        // Никогда не удаляем защищенные ключи
+        if (PROTECTED_KEYS.some(pk => key.includes(pk))) {
+            return false;
+        }
+        return true;
+    };
+    
+    // Удаляем по приоритетам
+    // 1. Сначала удаляем LOW приоритет (история чата и т.д.)
+    STORAGE_PRIORITIES.LOW.forEach(prefix => {
+        allKeys.forEach(k => {
+            if (canRemove(k) && k.includes(prefix) && !keysToRemove.includes(k)) {
+                keysToRemove.push(k);
+            }
+        });
+    });
+    
+    // 2. Если агрессивная очистка или все еще нужно место, удаляем MEDIUM
+    if (aggressive || keysToRemove.length === 0) {
+        STORAGE_PRIORITIES.MEDIUM.forEach(prefix => {
+            allKeys.forEach(k => {
+                if (canRemove(k) && k.includes(prefix) && !keysToRemove.includes(k)) {
+                    keysToRemove.push(k);
+                }
+            });
+        });
+    }
+    
+    // 3. Если агрессивная очистка, удаляем все остальное (кроме защищенных)
+    if (aggressive) {
+        allKeys.forEach(k => {
+            if (canRemove(k) && !keysToRemove.includes(k)) {
+                // Проверяем, что это не высокоприоритетные данные
+                const isHighPriority = STORAGE_PRIORITIES.HIGH.some(prefix => k.includes(prefix));
+                if (!isHighPriority) {
+                    keysToRemove.push(k);
+                }
+            }
+        });
+    }
+    
+    // Удаляем ключи
+    let removedCount = 0;
+    keysToRemove.forEach(k => {
+        try {
+            localStorage.removeItem(k);
+            removedCount++;
+        } catch (e) {
+            console.warn(`[Storage] Failed to remove key: ${k}`, e);
+        }
+    });
+    
+    console.log(`[Storage] Cleared ${removedCount} items from localStorage to free space`);
+    
+    // Пытаемся оценить освобожденное место
+    try {
+        const testKey = '__storage_test__';
+        const testValue = 'test';
+        localStorage.setItem(testKey, testValue);
+        localStorage.removeItem(testKey);
+        console.log(`[Storage] Storage test passed - space should be available now`);
+    } catch (e) {
+        console.error(`[Storage] Storage still full after cleanup!`, e);
+    }
+    
+    return removedCount;
 };
 
 const customStorage = {
@@ -60,14 +149,50 @@ const customStorage = {
         } catch (e: any) {
             // If it's a quota error, aggressively clear non-auth data
             if (e.name === 'QuotaExceededError' || e.message?.includes('quota')) {
-                cleanupStorage();
+                console.warn(`[Storage] Quota exceeded when setting ${key}, starting cleanup...`);
+                
+                // Сначала обычная очистка
+                const removedCount = cleanupStorage(false);
+                
+                // Если это критический ключ авторизации, делаем агрессивную очистку
+                const isAuthKey = PROTECTED_KEYS.some(pk => key.includes(pk));
+                if (isAuthKey) {
+                    console.warn(`[Storage] Auth key storage failed, performing aggressive cleanup...`);
+                    cleanupStorage(true);
+                }
 
                 // Try again after cleanup
                 try {
                     localStorage.setItem(key, value);
-                } catch {
-                    console.error("Storage still full after cleanup - auth may fail");
+                    console.log(`[Storage] Successfully saved ${key} after cleanup`);
+                } catch (retryError: any) {
+                    console.error(`[Storage] Storage still full after cleanup - ${key} may fail`, retryError);
+                    
+                    // Если это auth ключ и все еще не работает, это критично
+                    if (isAuthKey) {
+                        console.error(`[Storage] CRITICAL: Cannot save auth key ${key}. Auth may fail!`);
+                        // Пытаемся удалить еще больше данных
+                        try {
+                            // Удаляем всю историю чата принудительно
+                            const chatKeys = ['vibes_chat_history', 'vibes_ai_system_instruction'];
+                            chatKeys.forEach(ck => {
+                                try {
+                                    localStorage.removeItem(ck);
+                                    console.log(`[Storage] Force removed ${ck}`);
+                                } catch {}
+                            });
+                            
+                            // Пробуем еще раз
+                            localStorage.setItem(key, value);
+                            console.log(`[Storage] Successfully saved ${key} after force cleanup`);
+                        } catch (finalError) {
+                            console.error(`[Storage] FINAL ERROR: Cannot save ${key} even after force cleanup`, finalError);
+                        }
+                    }
                 }
+            } else {
+                // Другие ошибки тоже логируем
+                console.warn(`[Storage] Error setting ${key}:`, e);
             }
         }
         return Promise.resolve();
