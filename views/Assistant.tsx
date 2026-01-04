@@ -22,12 +22,9 @@ import { ChatMessage } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSound } from '../SoundContext';
 import { DEFAULT_AI_SYSTEM_INSTRUCTION } from '../data';
-import { supabase, cleanupStorage } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 
 // --- Configuration ---
-
-// Флаг для отключения сохранения в Supabase при проблемах
-const ENABLE_SUPABASE_CHAT_SAVE = true; // Установить false для отключения сохранения
 
 const QUICK_QUESTIONS = [
   "Как задеплоить на Vercel?",
@@ -158,7 +155,6 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
   const [systemInstruction, setSystemInstruction] = useState(DEFAULT_AI_SYSTEM_INSTRUCTION);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const [chatId, setChatId] = useState<string | null>(null);
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
   const [diagnosticInfo, setDiagnosticInfo] = useState<any>(null);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
@@ -171,137 +167,34 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
       }
   }, []);
 
-  // Sync with Supabase on Mount
+  // Load chat history from localStorage on mount
   useEffect(() => {
-    const syncChat = async () => {
-        try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) {
-                // Fallback for non-logged users
-                const saved = localStorage.getItem('vibes_chat_history');
-                if (saved) {
-                    try {
-                        const parsed = JSON.parse(saved);
-                        setMessages(parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })));
-                    } catch (e) { 
-                        console.error("[Chat] Failed to parse local chat history:", e);
-                    }
-                }
-                return;
-            }
-
-            // Если сохранение отключено, используем только localStorage
-            if (!ENABLE_SUPABASE_CHAT_SAVE) {
-                console.log("[Chat] Supabase chat save is disabled, using localStorage");
-                const saved = localStorage.getItem('vibes_chat_history');
-                if (saved) {
-                    try {
-                        const parsed = JSON.parse(saved);
-                        setMessages(parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })));
-                    } catch (e) { 
-                        console.error("[Chat] Failed to parse local chat history:", e);
-                    }
-                } else {
-                    // Создаем начальное сообщение
-                    const initialMsg: ChatMessage = {
-                        id: 'init',
-                        role: 'assistant',
-                        text: 'Привет! Я твой ИИ-ментор по вайб-кодингу. Готов помочь с кодом, ошибками или объяснить сложные штуки простыми словами. **С чего начнем?**',
-                        timestamp: new Date()
-                    };
-                    setMessages([initialMsg]);
-                }
-                return;
-            }
-
-            const userId = session.user.id;
-            const { data: existingChats, error } = await supabase
-                .from('chats')
-                .select('*')
-                .eq('user_id', userId)
-                .order('updated_at', { ascending: false })
-                .limit(1);
-
-            if (error) {
-                console.warn("[Chat] Failed to load from Supabase:", error);
-                // Fallback to localStorage
-                const saved = localStorage.getItem('vibes_chat_history');
-                if (saved) {
-                    try {
-                        const parsed = JSON.parse(saved);
-                        setMessages(parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })));
-                    } catch (e) { 
-                        console.error("[Chat] Failed to parse local chat history:", e);
-                    }
-                } else {
-                    // Создаем начальное сообщение
-                    const initialMsg: ChatMessage = {
-                        id: 'init',
-                        role: 'assistant',
-                        text: 'Привет! Я твой ИИ-ментор по вайб-кодингу. Готов помочь с кодом, ошибками или объяснить сложные штуки простыми словами. **С чего начнем?**',
-                        timestamp: new Date()
-                    };
-                    setMessages([initialMsg]);
-                }
-                return;
-            }
-
-            if (existingChats && existingChats.length > 0) {
-                setChatId(existingChats[0].id);
-                setMessages(existingChats[0].messages.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })));
-            } else {
-                const initialMsg: ChatMessage = {
-                    id: 'init',
-                    role: 'assistant',
-                    text: 'Привет! Я твой ИИ-ментор по вайб-кодингу. Готов помочь с кодом, ошибками или объяснить сложные штуки простыми словами. **С чего начнем?**',
-                    timestamp: new Date()
-                };
-                setMessages([initialMsg]);
-                
-                // Create first chat in DB (неблокирующе)
-                try {
-                    const { data: newChat, error: insertError } = await supabase
-                        .from('chats')
-                        .insert([{ user_id: userId, messages: [initialMsg] }])
-                        .select()
-                        .single();
-                    
-                    if (insertError) {
-                        console.warn("[Chat] Failed to create chat in Supabase:", insertError);
-                        // Не блокируем работу, просто логируем
-                    } else if (newChat) {
-                        setChatId(newChat.id);
-                    }
-                } catch (err) {
-                    console.error("[Chat] Error creating chat:", err);
-                    // Не блокируем работу компонента
-                }
-            }
-        } catch (err) {
-            console.error("[Chat] Error syncing chat:", err);
-            // Не блокируем работу компонента, используем fallback
-            const saved = localStorage.getItem('vibes_chat_history');
-            if (saved) {
-                try {
-                    const parsed = JSON.parse(saved);
-                    setMessages(parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })));
-                } catch (e) { 
-                    console.error("[Chat] Failed to parse local chat history:", e);
-                }
-            } else {
-                // Создаем начальное сообщение
-                const initialMsg: ChatMessage = {
-                    id: 'init',
-                    role: 'assistant',
-                    text: 'Привет! Я твой ИИ-ментор по вайб-кодингу. Готов помочь с кодом, ошибками или объяснить сложные штуки простыми словами. **С чего начнем?**',
-                    timestamp: new Date()
-                };
-                setMessages([initialMsg]);
-            }
-        }
-    };
-
-    syncChat();
+    const saved = localStorage.getItem('vibes_chat_history');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setMessages(parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })));
+      } catch (e) { 
+        console.error("[Chat] Failed to parse local chat history:", e);
+        // Создаем начальное сообщение при ошибке парсинга
+        const initialMsg: ChatMessage = {
+          id: 'init',
+          role: 'assistant',
+          text: 'Привет! Я твой ИИ-ментор по вайб-кодингу. Готов помочь с кодом, ошибками или объяснить сложные штуки простыми словами. **С чего начнем?**',
+          timestamp: new Date()
+        };
+        setMessages([initialMsg]);
+      }
+    } else {
+      // Создаем начальное сообщение если истории нет
+      const initialMsg: ChatMessage = {
+        id: 'init',
+        role: 'assistant',
+        text: 'Привет! Я твой ИИ-ментор по вайб-кодингу. Готов помочь с кодом, ошибками или объяснить сложные штуки простыми словами. **С чего начнем?**',
+        timestamp: new Date()
+      };
+      setMessages([initialMsg]);
+    }
   }, []);
 
   // Handle Initial Context from other pages
@@ -312,55 +205,16 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
       }
   }, [initialMessage]);
 
-  // Persist to Supabase when messages change (no localStorage to avoid quota issues)
+  // Save to localStorage when messages change
   useEffect(() => {
-    // Если сохранение отключено, используем localStorage
-    if (!ENABLE_SUPABASE_CHAT_SAVE) {
-      try {
-        localStorage.setItem('vibes_chat_history', JSON.stringify(messages));
-      } catch (e) {
-        console.warn("[Chat] Failed to save to localStorage:", e);
-      }
-      return;
+    if (messages.length === 0) return;
+    
+    try {
+      localStorage.setItem('vibes_chat_history', JSON.stringify(messages));
+    } catch (e) {
+      console.warn("[Chat] Failed to save to localStorage:", e);
     }
-
-    const saveChat = async () => {
-        if (!chatId || messages.length === 0) return;
-
-        try {
-            // Limit messages to last 100 to prevent DB bloat
-            const messagesToSave = messages.slice(-100);
-
-            const { error } = await supabase
-                .from('chats')
-                .update({ messages: messagesToSave, updated_at: new Date().toISOString() })
-                .eq('id', chatId);
-            
-            if (error) {
-                console.warn("[Chat] Failed to save to Supabase:", error);
-                // Не блокируем работу, просто логируем
-                // Fallback to localStorage при ошибке
-                try {
-                    localStorage.setItem('vibes_chat_history', JSON.stringify(messages));
-                } catch (localError) {
-                    console.warn("[Chat] Failed to save to localStorage fallback:", localError);
-                }
-            }
-        } catch (err) {
-            console.error("[Chat] Error saving chat:", err);
-            // Не показываем ошибку пользователю, просто логируем
-            // Fallback to localStorage при ошибке
-            try {
-                localStorage.setItem('vibes_chat_history', JSON.stringify(messages));
-            } catch (localError) {
-                console.warn("[Chat] Failed to save to localStorage fallback:", localError);
-            }
-        }
-    };
-
-    const timer = setTimeout(saveChat, 1000); // Debounce saves
-    return () => clearTimeout(timer);
-  }, [messages, chatId]);
+  }, [messages]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -377,36 +231,6 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
         inputRef.current.style.height = inputRef.current.scrollHeight + 'px';
     }
   }, [inputValue]);
-
-  // Функция проверки доступности API
-  const checkApiAvailability = async (): Promise<{ available: boolean; error?: string }> => {
-    try {
-      let pingUrl: string;
-      try {
-        const url = new URL("/api/ping", window.location.href);
-        pingUrl = url.toString();
-      } catch (e) {
-        pingUrl = "/api/ping";
-      }
-
-      const response = await fetch(pingUrl, {
-        method: "GET",
-        signal: AbortSignal.timeout(5000) // 5 секунд timeout для проверки
-      });
-
-      if (response.ok) {
-        return { available: true };
-      } else {
-        return { available: false, error: `API вернул статус ${response.status}` };
-      }
-    } catch (error: any) {
-      console.warn("[API Check] Ping failed:", error);
-      return { 
-        available: false, 
-        error: error.message || 'Не удалось подключиться к API'
-      };
-    }
-  };
 
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
@@ -445,52 +269,6 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
     // Reset height
     if (inputRef.current) inputRef.current.style.height = 'auto';
 
-    // Проверка доступности API перед отправкой запроса
-    const apiCheck = await checkApiAvailability();
-    if (!apiCheck.available) {
-      console.warn("[API] API недоступен:", apiCheck.error);
-      // Не блокируем запрос, но логируем предупреждение
-    }
-
-    // Создаём AbortController для timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 секунд timeout
-
-    // Retry логика с экспоненциальной задержкой
-    const maxRetries = 3;
-
-    // Use URL constructor to ensure Safari compatibility
-    // This guarantees a valid absolute URL
-    let apiUrl: string;
-    let apiUrlAlt: string | null = null; // Альтернативный URL для Safari
-    try {
-      const url = new URL("/api/chat", window.location.href);
-      apiUrl = url.toString();
-      
-      // Альтернативный способ для Safari - используем origin напрямую
-      if (window.location.origin) {
-        apiUrlAlt = `${window.location.origin}/api/chat`;
-      }
-      
-      console.log("[URL] Constructed URL:", {
-        input: "/api/chat",
-        base: window.location.href,
-        result: apiUrl,
-        alt: apiUrlAlt,
-        origin: window.location.origin,
-        protocol: window.location.protocol,
-        hostname: window.location.hostname
-      });
-    } catch (e) {
-      console.error("[URL] Failed to construct URL:", e);
-      // Fallback варианты
-      if (window.location.origin) {
-        apiUrl = `${window.location.origin}/api/chat`;
-      } else {
-        apiUrl = "/api/chat"; // Последний fallback
-      }
-    }
-
     const accessToken = session.access_token;
 
     const apiMessages = [
@@ -516,98 +294,43 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
       "messages": apiMessages
     };
 
+    // Формируем URL для API
+    let apiUrl = "/api/chat";
+    try {
+      const url = new URL("/api/chat", window.location.href);
+      apiUrl = url.toString();
+    } catch (e) {
+      // Используем относительный путь если не удалось создать абсолютный URL
+      apiUrl = "/api/chat";
+    }
+
     // Предупреждение для разработчика при локальной разработке
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        console.warn("⚠️ API функции работают только на Vercel. Для локальной разработки используйте 'vercel dev'.");
+      console.warn("⚠️ API функции работают только на Vercel. Для локальной разработки используйте 'vercel dev'.");
     }
 
-    console.log("🔍 AI Assistant Debug:", {
-      apiUrl,
-      apiUrlAlt,
-      apiUrlType: typeof apiUrl,
-      apiUrlLength: apiUrl.length,
-      origin: window.location.origin,
-      locationHref: window.location.href,
-      headersCount: Object.keys(headers).length,
-      hasAuth: !!headers["Authorization"],
-      messagesCount: apiMessages.length,
-      bodySize: JSON.stringify(requestBody).length
-    });
-    let lastError: any = null;
-    let response: Response | null = null;
+    // Создаём AbortController для timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 секунд timeout
 
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        // Выбираем URL для попытки
-        const urlToUse = (attempt > 0 && apiUrlAlt) ? apiUrlAlt : apiUrl;
-        
-        if (attempt > 0) {
-          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Экспоненциальная задержка, макс 5 сек
-          console.log(`[API] Retry attempt ${attempt}/${maxRetries} after ${delay}ms delay...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-
-        console.log(`[API] Sending request to: ${urlToUse} (attempt ${attempt + 1}/${maxRetries + 1})`);
-        
-        // Создаем новый controller для каждой попытки
-        const retryController = new AbortController();
-        const retryTimeoutId = setTimeout(() => retryController.abort(), 30000);
-        
-        response = await fetch(urlToUse, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(requestBody),
-          signal: retryController.signal
-        });
-
-        clearTimeout(retryTimeoutId);
-        clearTimeout(timeoutId);
-
-        // Если успешно, выходим из цикла
-        break;
-      } catch (error: any) {
-        lastError = error;
-        console.warn(`[API] Attempt ${attempt + 1} failed:`, {
-          name: error.name,
-          message: error.message,
-          isLoadFailed: error.message?.includes('Load failed') || error.message?.includes('Failed to fetch'),
-          isAbort: error.name === 'AbortError'
-        });
-
-        // Если это AbortError (timeout), не ретраим
-        if (error.name === 'AbortError') {
-          console.error("[API] Request timeout, not retrying");
-          break;
-        }
-
-        // Если это последняя попытка, выбрасываем ошибку
-        if (attempt === maxRetries) {
-          console.error("[API] All retry attempts exhausted");
-          throw error;
-        }
-
-        // Для "Load failed" и "Failed to fetch" пробуем альтернативный URL на следующей попытке
-        if ((error.message?.includes('Load failed') || error.message?.includes('Failed to fetch')) && apiUrlAlt && attempt === 0) {
-          console.log("[API] Load failed detected, will try alternative URL on next attempt");
-        }
-      }
-    }
-
-    if (!response) {
-      throw lastError || new Error('Failed to get response after all retries');
-    }
-
+    let response: Response;
+    
     try {
-      console.log("[API] Response status:", response.status, response.statusText);
+      response = await fetch(apiUrl, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(requestBody),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         let errorData: any = {};
         try {
           errorData = await response.json();
-          console.error("[API] Error response data:", errorData);
         } catch (parseError) {
           const textError = await response.text().catch(() => 'Unable to read error response');
-          console.error("[API] Failed to parse error response:", textError);
           errorData = { error: `HTTP ${response.status}: ${response.statusText}`, raw: textError };
         }
 
@@ -616,12 +339,10 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
         (apiError as any).code = errorData.code;
         (apiError as any).details = errorData.details;
         (apiError as any).status = response.status;
-        (apiError as any).openRouterError = errorData.openRouterError;
         throw apiError;
       }
 
       const data = await response.json();
-      console.log("[API] Response parsed successfully, choices:", data.choices?.length || 0);
       const responseText = data.choices?.[0]?.message?.content || "Извини, я не смог сгенерировать ответ. Попробуй еще раз.";
 
       const newAssistantMsg: ChatMessage = {
@@ -636,46 +357,31 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
     } catch (error: any) {
       clearTimeout(timeoutId);
       
-      console.error("❌ API Error:", {
-        name: error.name,
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        status: error.status,
-        stack: error.stack,
-        fullError: error
-      });
+      console.error("❌ API Error:", error);
 
       let errorText = 'Произошла ошибка соединения с нейросетью. Проверь интернет или API ключ.';
-      let showDetails = false;
 
       // Обработка различных типов ошибок
       if (error.name === 'AbortError') {
         errorText = 'Запрос занял слишком много времени (более 30 секунд). Попробуй ещё раз или упрости вопрос.';
       } else if (error.name === 'TypeError' && (error.message?.includes('Failed to fetch') || error.message?.includes('Load failed'))) {
-        // Обработка ошибок подключения (включая Safari "Load failed")
         const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
         if (isLocalhost) {
           errorText = 'API функции недоступны локально. Используйте "vercel dev" для локальной разработки.';
         } else {
-          errorText = `Ошибка подключения к API после ${maxRetries + 1} попыток. Возможные причины:\n\n1. Проблемы с сетью или интернет-соединением\n2. API функция не развернута на Vercel\n3. Проблемы с CORS или настройками Vercel\n\nПопробуйте:\n- Обновить страницу\n- Проверить интернет-соединение\n- Проверить логи Vercel Functions`;
-          showDetails = true;
+          errorText = 'Ошибка подключения к API. Проверьте:\n\n1. Интернет-соединение\n2. Что API функция развернута на Vercel\n3. Логи Vercel Functions';
         }
-      } else if (error.message === 'Failed to get response after all retries') {
-        errorText = `Не удалось подключиться к API после ${maxRetries + 1} попыток. Проверьте:\n\n1. Интернет-соединение\n2. Что API функция развернута на Vercel\n3. Логи Vercel Functions для деталей`;
-        showDetails = true;
       } else if (error.code === 'OPENROUTER_KEY_MISSING') {
         errorText = error.message || 'OpenRouter API Key не настроен на сервере.';
         if (error.details) {
           errorText += `\n\n${error.details}`;
         }
-        showDetails = true;
+        errorText += `\n\n💡 Проверьте:\n1. Переменная OPENROUTER_API_KEY добавлена в Vercel Dashboard (Settings -> Environment Variables)\n2. Переменная добавлена для всех окружений (Production, Preview, Development)\n3. Выполнен передеплой после добавления переменной\n4. API ключ OpenRouter действителен`;
       } else if (error.code === 'OPENROUTER_AUTH_ERROR') {
         errorText = error.message || 'Неверный API ключ OpenRouter.';
         if (error.details) {
           errorText += `\n\n${error.details}`;
         }
-        showDetails = true;
       } else if (error.code === 'OPENROUTER_RATE_LIMIT') {
         errorText = error.message || 'Превышен лимит запросов к OpenRouter API. Попробуйте позже.';
       } else if (error.code === 'OPENROUTER_CONNECTION_ERROR') {
@@ -686,21 +392,12 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
       } else if (error.code === 'OPENROUTER_SERVER_ERROR') {
         errorText = error.message || 'Сервис OpenRouter временно недоступен. Попробуйте позже.';
       } else if (error.message?.includes('Сессия истекла') || error.message?.includes('AUTH_REQUIRED') || error.code === 'AUTH_REQUIRED') {
-        // Clear storage and suggest re-login
-        cleanupStorage();
         errorText = 'Сессия истекла. Пожалуйста, перезагрузите страницу и войдите заново.';
       } else if (error.message) {
         errorText = error.message;
-        // Показываем детали для других ошибок, если они есть
         if (error.details) {
           errorText += `\n\nДетали: ${error.details}`;
-          showDetails = true;
         }
-      }
-
-      // Добавляем инструкцию по проверке настроек, если это ошибка конфигурации
-      if (showDetails && (error.code?.includes('OPENROUTER') || error.code === 'OPENROUTER_KEY_MISSING')) {
-        errorText += `\n\n💡 Проверьте:\n1. Переменная OPENROUTER_API_KEY добавлена в Vercel Dashboard (Settings -> Environment Variables)\n2. Переменная добавлена для всех окружений (Production, Preview, Development)\n3. Выполнен передеплой после добавления переменной\n4. API ключ OpenRouter действителен`;
       }
 
       const errorMsg: ChatMessage = {
@@ -727,7 +424,7 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
     }
   };
 
-  const handleClearChat = async () => {
+  const handleClearChat = () => {
     if (window.confirm('Очистить историю переписки?')) {
         const freshMessage: ChatMessage = {
             id: Date.now().toString(),
@@ -738,27 +435,11 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
 
         setMessages([freshMessage]);
 
-        // Clear in database (неблокирующе)
-        if (chatId && ENABLE_SUPABASE_CHAT_SAVE) {
-            try {
-                const { error } = await supabase
-                    .from('chats')
-                    .update({ messages: [freshMessage], updated_at: new Date().toISOString() })
-                    .eq('id', chatId);
-                
-                if (error) {
-                    console.warn("[Chat] Failed to clear chat in Supabase:", error);
-                }
-            } catch (err) {
-                console.error("[Chat] Error clearing chat:", err);
-            }
-        }
-
-        // Also clear any legacy localStorage data
+        // Сохраняем новое состояние в localStorage (useEffect автоматически сохранит)
         try {
-            localStorage.removeItem('vibes_chat_history');
+            localStorage.setItem('vibes_chat_history', JSON.stringify([freshMessage]));
         } catch (e) {
-            console.warn("[Chat] Failed to clear localStorage:", e);
+            console.warn("[Chat] Failed to save to localStorage:", e);
         }
     }
   };
