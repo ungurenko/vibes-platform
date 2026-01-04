@@ -18,7 +18,7 @@ import { ChatMessage } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSound } from '../SoundContext';
 import { DEFAULT_AI_SYSTEM_INSTRUCTION } from '../data';
-import { supabase } from '../lib/supabase';
+import { supabase, cleanupStorage } from '../lib/supabase';
 
 // --- Configuration ---
 
@@ -140,9 +140,10 @@ const FormattedText: React.FC<{ text: string }> = ({ text }) => {
 interface AssistantProps {
     initialMessage?: string | null;
     onMessageHandled?: () => void;
+    session?: { access_token: string; user: { id: string } } | null;
 }
 
-const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled }) => {
+const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled, session: sessionProp }) => {
   const { playSound } = useSound();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -218,21 +219,18 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled 
       }
   }, [initialMessage]);
 
-  // Persist to Supabase when messages change
+  // Persist to Supabase when messages change (no localStorage to avoid quota issues)
   useEffect(() => {
     const saveChat = async () => {
         if (!chatId || messages.length === 0) return;
-        
+
+        // Limit messages to last 100 to prevent DB bloat
+        const messagesToSave = messages.slice(-100);
+
         await supabase
             .from('chats')
-            .update({ messages, updated_at: new Date().toISOString() })
+            .update({ messages: messagesToSave, updated_at: new Date().toISOString() })
             .eq('id', chatId);
-        
-        try {
-            localStorage.setItem('vibes_chat_history', JSON.stringify(messages.slice(-50)));
-        } catch (e) {
-            console.warn("Local storage full, skipping chat save");
-        }
     };
 
     const timer = setTimeout(saveChat, 1000); // Debounce saves
@@ -258,6 +256,24 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled 
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
 
+    // Используем сессию из props (от App.tsx) или пробуем получить из Supabase
+    let session = sessionProp;
+    if (!session) {
+      const { data } = await supabase.auth.getSession();
+      session = data.session;
+    }
+
+    if (!session) {
+      const errorMsg: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        text: 'Вы не авторизованы. Пожалуйста, перезагрузите страницу и войдите в систему.',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMsg]);
+      return;
+    }
+
     playSound('success'); // Play sound for sent message
 
     const newUserMsg: ChatMessage = {
@@ -270,7 +286,7 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled 
     setMessages(prev => [...prev, newUserMsg]);
     setInputValue('');
     setIsTyping(true);
-    
+
     // Reset height
     if (inputRef.current) inputRef.current.style.height = 'auto';
 
@@ -279,9 +295,7 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled 
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 секунд timeout
 
     try {
-      // Получаем токен авторизации
-      const { data: { session } } = await supabase.auth.getSession();
-      const accessToken = session?.access_token;
+      const accessToken = session.access_token;
 
       const apiMessages = [
         { role: 'system', content: systemInstruction },
@@ -337,6 +351,10 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled 
       let errorText = 'Произошла ошибка соединения с нейросетью. Проверь интернет или API ключ.';
       if (error.name === 'AbortError') {
         errorText = 'Запрос занял слишком много времени. Попробуй ещё раз или упрости вопрос.';
+      } else if (error.message?.includes('Сессия истекла') || error.message?.includes('AUTH_REQUIRED')) {
+        // Clear storage and suggest re-login
+        cleanupStorage();
+        errorText = 'Сессия истекла. Пожалуйста, перезагрузите страницу и войдите заново.';
       } else if (error.message) {
         errorText = error.message;
       }
@@ -365,14 +383,26 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled 
     }
   };
 
-  const handleClearChat = () => {
+  const handleClearChat = async () => {
     if (window.confirm('Очистить историю переписки?')) {
-        setMessages([{
+        const freshMessage: ChatMessage = {
             id: Date.now().toString(),
             role: 'assistant',
-            text: 'Чат очищен. Я готов к новым задачам! 🚀',
+            text: 'Чат очищен. Я готов к новым задачам!',
             timestamp: new Date()
-        }]);
+        };
+
+        setMessages([freshMessage]);
+
+        // Clear in database
+        if (chatId) {
+            await supabase
+                .from('chats')
+                .update({ messages: [freshMessage], updated_at: new Date().toISOString() })
+                .eq('id', chatId);
+        }
+
+        // Also clear any legacy localStorage data
         localStorage.removeItem('vibes_chat_history');
     }
   };

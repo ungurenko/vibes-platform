@@ -13,7 +13,10 @@ export default async function handler(req, res) {
   // --- Аутентификация ---
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Требуется авторизация' });
+    return res.status(401).json({
+      error: 'Сессия истекла. Пожалуйста, перезагрузите страницу и войдите заново.',
+      code: 'AUTH_REQUIRED'
+    });
   }
 
   const token = authHeader.split('Bearer ')[1];
