@@ -65,7 +65,23 @@ export default async function handler(req, res) {
     }
 
     // --- Валидация входных данных ---
-    const { messages, model } = req.body;
+    console.log('[API] Request body type:', typeof req.body);
+    
+    let body = req.body;
+    if (typeof body === 'string') {
+        try {
+            body = JSON.parse(body);
+        } catch (e) {
+            console.error('[API] Failed to parse request body:', e);
+            return res.status(400).json({ error: 'Invalid JSON body' });
+        }
+    }
+
+    if (!body) {
+        return res.status(400).json({ error: 'Empty request body' });
+    }
+
+    const { messages, model } = body;
 
     if (!messages) {
       return res.status(400).json({ error: 'Параметр messages обязателен' });
