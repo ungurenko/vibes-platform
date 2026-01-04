@@ -11,7 +11,11 @@ import {
   Check, 
   Terminal, 
   Zap,
-  MessageSquare
+  MessageSquare,
+  Settings,
+  AlertCircle,
+  CheckCircle2,
+  XCircle
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { ChatMessage } from '../types';
@@ -21,6 +25,9 @@ import { DEFAULT_AI_SYSTEM_INSTRUCTION } from '../data';
 import { supabase, cleanupStorage } from '../lib/supabase';
 
 // --- Configuration ---
+
+// Флаг для отключения сохранения в Supabase при проблемах
+const ENABLE_SUPABASE_CHAT_SAVE = true; // Установить false для отключения сохранения
 
 const QUICK_QUESTIONS = [
   "Как задеплоить на Vercel?",
@@ -152,6 +159,9 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [chatId, setChatId] = useState<string | null>(null);
+  const [isCheckingConnection, setIsCheckingConnection] = useState(false);
+  const [diagnosticInfo, setDiagnosticInfo] = useState<any>(null);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
   
   // Load system instruction from localStorage
   useEffect(() => {
@@ -164,47 +174,130 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
   // Sync with Supabase on Mount
   useEffect(() => {
     const syncChat = async () => {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-            // Fallback for non-logged users
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+                // Fallback for non-logged users
+                const saved = localStorage.getItem('vibes_chat_history');
+                if (saved) {
+                    try {
+                        const parsed = JSON.parse(saved);
+                        setMessages(parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })));
+                    } catch (e) { 
+                        console.error("[Chat] Failed to parse local chat history:", e);
+                    }
+                }
+                return;
+            }
+
+            // Если сохранение отключено, используем только localStorage
+            if (!ENABLE_SUPABASE_CHAT_SAVE) {
+                console.log("[Chat] Supabase chat save is disabled, using localStorage");
+                const saved = localStorage.getItem('vibes_chat_history');
+                if (saved) {
+                    try {
+                        const parsed = JSON.parse(saved);
+                        setMessages(parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })));
+                    } catch (e) { 
+                        console.error("[Chat] Failed to parse local chat history:", e);
+                    }
+                } else {
+                    // Создаем начальное сообщение
+                    const initialMsg: ChatMessage = {
+                        id: 'init',
+                        role: 'assistant',
+                        text: 'Привет! Я твой ИИ-ментор по вайб-кодингу. Готов помочь с кодом, ошибками или объяснить сложные штуки простыми словами. **С чего начнем?**',
+                        timestamp: new Date()
+                    };
+                    setMessages([initialMsg]);
+                }
+                return;
+            }
+
+            const userId = session.user.id;
+            const { data: existingChats, error } = await supabase
+                .from('chats')
+                .select('*')
+                .eq('user_id', userId)
+                .order('updated_at', { ascending: false })
+                .limit(1);
+
+            if (error) {
+                console.warn("[Chat] Failed to load from Supabase:", error);
+                // Fallback to localStorage
+                const saved = localStorage.getItem('vibes_chat_history');
+                if (saved) {
+                    try {
+                        const parsed = JSON.parse(saved);
+                        setMessages(parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })));
+                    } catch (e) { 
+                        console.error("[Chat] Failed to parse local chat history:", e);
+                    }
+                } else {
+                    // Создаем начальное сообщение
+                    const initialMsg: ChatMessage = {
+                        id: 'init',
+                        role: 'assistant',
+                        text: 'Привет! Я твой ИИ-ментор по вайб-кодингу. Готов помочь с кодом, ошибками или объяснить сложные штуки простыми словами. **С чего начнем?**',
+                        timestamp: new Date()
+                    };
+                    setMessages([initialMsg]);
+                }
+                return;
+            }
+
+            if (existingChats && existingChats.length > 0) {
+                setChatId(existingChats[0].id);
+                setMessages(existingChats[0].messages.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })));
+            } else {
+                const initialMsg: ChatMessage = {
+                    id: 'init',
+                    role: 'assistant',
+                    text: 'Привет! Я твой ИИ-ментор по вайб-кодингу. Готов помочь с кодом, ошибками или объяснить сложные штуки простыми словами. **С чего начнем?**',
+                    timestamp: new Date()
+                };
+                setMessages([initialMsg]);
+                
+                // Create first chat in DB (неблокирующе)
+                try {
+                    const { data: newChat, error: insertError } = await supabase
+                        .from('chats')
+                        .insert([{ user_id: userId, messages: [initialMsg] }])
+                        .select()
+                        .single();
+                    
+                    if (insertError) {
+                        console.warn("[Chat] Failed to create chat in Supabase:", insertError);
+                        // Не блокируем работу, просто логируем
+                    } else if (newChat) {
+                        setChatId(newChat.id);
+                    }
+                } catch (err) {
+                    console.error("[Chat] Error creating chat:", err);
+                    // Не блокируем работу компонента
+                }
+            }
+        } catch (err) {
+            console.error("[Chat] Error syncing chat:", err);
+            // Не блокируем работу компонента, используем fallback
             const saved = localStorage.getItem('vibes_chat_history');
             if (saved) {
                 try {
                     const parsed = JSON.parse(saved);
                     setMessages(parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })));
-                } catch (e) { console.error("Failed to parse local chat history"); }
+                } catch (e) { 
+                    console.error("[Chat] Failed to parse local chat history:", e);
+                }
+            } else {
+                // Создаем начальное сообщение
+                const initialMsg: ChatMessage = {
+                    id: 'init',
+                    role: 'assistant',
+                    text: 'Привет! Я твой ИИ-ментор по вайб-кодингу. Готов помочь с кодом, ошибками или объяснить сложные штуки простыми словами. **С чего начнем?**',
+                    timestamp: new Date()
+                };
+                setMessages([initialMsg]);
             }
-            return;
-        }
-
-        const userId = session.user.id;
-        const { data: existingChats, error } = await supabase
-            .from('chats')
-            .select('*')
-            .eq('user_id', userId)
-            .order('updated_at', { ascending: false })
-            .limit(1);
-
-        if (existingChats && existingChats.length > 0) {
-            setChatId(existingChats[0].id);
-            setMessages(existingChats[0].messages.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })));
-        } else {
-            const initialMsg: ChatMessage = {
-                id: 'init',
-                role: 'assistant',
-                text: 'Привет! Я твой ИИ-ментор по вайб-кодингу. Готов помочь с кодом, ошибками или объяснить сложные штуки простыми словами. **С чего начнем?**',
-                timestamp: new Date()
-            };
-            setMessages([initialMsg]);
-            
-            // Create first chat in DB
-            const { data: newChat } = await supabase
-                .from('chats')
-                .insert([{ user_id: userId, messages: [initialMsg] }])
-                .select()
-                .single();
-            
-            if (newChat) setChatId(newChat.id);
         }
     };
 
@@ -221,16 +314,48 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
 
   // Persist to Supabase when messages change (no localStorage to avoid quota issues)
   useEffect(() => {
+    // Если сохранение отключено, используем localStorage
+    if (!ENABLE_SUPABASE_CHAT_SAVE) {
+      try {
+        localStorage.setItem('vibes_chat_history', JSON.stringify(messages));
+      } catch (e) {
+        console.warn("[Chat] Failed to save to localStorage:", e);
+      }
+      return;
+    }
+
     const saveChat = async () => {
         if (!chatId || messages.length === 0) return;
 
-        // Limit messages to last 100 to prevent DB bloat
-        const messagesToSave = messages.slice(-100);
+        try {
+            // Limit messages to last 100 to prevent DB bloat
+            const messagesToSave = messages.slice(-100);
 
-        await supabase
-            .from('chats')
-            .update({ messages: messagesToSave, updated_at: new Date().toISOString() })
-            .eq('id', chatId);
+            const { error } = await supabase
+                .from('chats')
+                .update({ messages: messagesToSave, updated_at: new Date().toISOString() })
+                .eq('id', chatId);
+            
+            if (error) {
+                console.warn("[Chat] Failed to save to Supabase:", error);
+                // Не блокируем работу, просто логируем
+                // Fallback to localStorage при ошибке
+                try {
+                    localStorage.setItem('vibes_chat_history', JSON.stringify(messages));
+                } catch (localError) {
+                    console.warn("[Chat] Failed to save to localStorage fallback:", localError);
+                }
+            }
+        } catch (err) {
+            console.error("[Chat] Error saving chat:", err);
+            // Не показываем ошибку пользователю, просто логируем
+            // Fallback to localStorage при ошибке
+            try {
+                localStorage.setItem('vibes_chat_history', JSON.stringify(messages));
+            } catch (localError) {
+                console.warn("[Chat] Failed to save to localStorage fallback:", localError);
+            }
+        }
     };
 
     const timer = setTimeout(saveChat, 1000); // Debounce saves
@@ -252,6 +377,36 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
         inputRef.current.style.height = inputRef.current.scrollHeight + 'px';
     }
   }, [inputValue]);
+
+  // Функция проверки доступности API
+  const checkApiAvailability = async (): Promise<{ available: boolean; error?: string }> => {
+    try {
+      let pingUrl: string;
+      try {
+        const url = new URL("/api/ping", window.location.href);
+        pingUrl = url.toString();
+      } catch (e) {
+        pingUrl = "/api/ping";
+      }
+
+      const response = await fetch(pingUrl, {
+        method: "GET",
+        signal: AbortSignal.timeout(5000) // 5 секунд timeout для проверки
+      });
+
+      if (response.ok) {
+        return { available: true };
+      } else {
+        return { available: false, error: `API вернул статус ${response.status}` };
+      }
+    } catch (error: any) {
+      console.warn("[API Check] Ping failed:", error);
+      return { 
+        available: false, 
+        error: error.message || 'Не удалось подключиться к API'
+      };
+    }
+  };
 
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
@@ -289,6 +444,13 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
 
     // Reset height
     if (inputRef.current) inputRef.current.style.height = 'auto';
+
+    // Проверка доступности API перед отправкой запроса
+    const apiCheck = await checkApiAvailability();
+    if (!apiCheck.available) {
+      console.warn("[API] API недоступен:", apiCheck.error);
+      // Не блокируем запрос, но логируем предупреждение
+    }
 
     // Создаём AbortController для timeout
     const controller = new AbortController();
@@ -356,6 +518,7 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
         bodySize: JSON.stringify(requestBody).length
       });
 
+      console.log("[API] Sending request to:", apiUrl);
       const response = await fetch(apiUrl, {
         method: "POST",
         headers,
@@ -365,12 +528,30 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
 
       clearTimeout(timeoutId);
 
+      console.log("[API] Response status:", response.status, response.statusText);
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `API request failed with status ${response.status}`);
+        let errorData: any = {};
+        try {
+          errorData = await response.json();
+          console.error("[API] Error response data:", errorData);
+        } catch (parseError) {
+          const textError = await response.text().catch(() => 'Unable to read error response');
+          console.error("[API] Failed to parse error response:", textError);
+          errorData = { error: `HTTP ${response.status}: ${response.statusText}`, raw: textError };
+        }
+
+        // Создаем ошибку с детальной информацией
+        const apiError = new Error(errorData.error || `API request failed with status ${response.status}`);
+        (apiError as any).code = errorData.code;
+        (apiError as any).details = errorData.details;
+        (apiError as any).status = response.status;
+        (apiError as any).openRouterError = errorData.openRouterError;
+        throw apiError;
       }
 
       const data = await response.json();
+      console.log("[API] Response parsed successfully, choices:", data.choices?.length || 0);
       const responseText = data.choices?.[0]?.message?.content || "Извини, я не смог сгенерировать ответ. Попробуй еще раз.";
 
       const newAssistantMsg: ChatMessage = {
@@ -384,16 +565,23 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
 
     } catch (error: any) {
       clearTimeout(timeoutId);
-      console.error("❌ OpenRouter Error:", {
+      
+      console.error("❌ API Error:", {
         name: error.name,
         message: error.message,
+        code: error.code,
+        details: error.details,
+        status: error.status,
         stack: error.stack,
         fullError: error
       });
 
       let errorText = 'Произошла ошибка соединения с нейросетью. Проверь интернет или API ключ.';
+      let showDetails = false;
+
+      // Обработка различных типов ошибок
       if (error.name === 'AbortError') {
-        errorText = 'Запрос занял слишком много времени. Попробуй ещё раз или упрости вопрос.';
+        errorText = 'Запрос занял слишком много времени (более 30 секунд). Попробуй ещё раз или упрости вопрос.';
       } else if (error.name === 'TypeError' && (error.message?.includes('Failed to fetch') || error.message?.includes('Load failed'))) {
         // Обработка ошибок подключения (включая Safari "Load failed")
         const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -401,13 +589,45 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
           errorText = 'API функции недоступны локально. Используйте "vercel dev" для локальной разработки.';
         } else {
           errorText = `Ошибка подключения к API. Проверьте настройки Vercel или переменные окружения.`;
+          showDetails = true;
         }
-      } else if (error.message?.includes('Сессия истекла') || error.message?.includes('AUTH_REQUIRED')) {
+      } else if (error.code === 'OPENROUTER_KEY_MISSING') {
+        errorText = error.message || 'OpenRouter API Key не настроен на сервере.';
+        if (error.details) {
+          errorText += `\n\n${error.details}`;
+        }
+        showDetails = true;
+      } else if (error.code === 'OPENROUTER_AUTH_ERROR') {
+        errorText = error.message || 'Неверный API ключ OpenRouter.';
+        if (error.details) {
+          errorText += `\n\n${error.details}`;
+        }
+        showDetails = true;
+      } else if (error.code === 'OPENROUTER_RATE_LIMIT') {
+        errorText = error.message || 'Превышен лимит запросов к OpenRouter API. Попробуйте позже.';
+      } else if (error.code === 'OPENROUTER_CONNECTION_ERROR') {
+        errorText = error.message || 'Не удалось подключиться к OpenRouter API.';
+        if (error.details) {
+          errorText += `\n\nДетали: ${error.details}`;
+        }
+      } else if (error.code === 'OPENROUTER_SERVER_ERROR') {
+        errorText = error.message || 'Сервис OpenRouter временно недоступен. Попробуйте позже.';
+      } else if (error.message?.includes('Сессия истекла') || error.message?.includes('AUTH_REQUIRED') || error.code === 'AUTH_REQUIRED') {
         // Clear storage and suggest re-login
         cleanupStorage();
         errorText = 'Сессия истекла. Пожалуйста, перезагрузите страницу и войдите заново.';
       } else if (error.message) {
         errorText = error.message;
+        // Показываем детали для других ошибок, если они есть
+        if (error.details) {
+          errorText += `\n\nДетали: ${error.details}`;
+          showDetails = true;
+        }
+      }
+
+      // Добавляем инструкцию по проверке настроек, если это ошибка конфигурации
+      if (showDetails && (error.code?.includes('OPENROUTER') || error.code === 'OPENROUTER_KEY_MISSING')) {
+        errorText += `\n\n💡 Проверьте:\n1. Переменная OPENROUTER_API_KEY добавлена в Vercel Dashboard (Settings -> Environment Variables)\n2. Переменная добавлена для всех окружений (Production, Preview, Development)\n3. Выполнен передеплой после добавления переменной\n4. API ключ OpenRouter действителен`;
       }
 
       const errorMsg: ChatMessage = {
@@ -445,16 +665,69 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
 
         setMessages([freshMessage]);
 
-        // Clear in database
-        if (chatId) {
-            await supabase
-                .from('chats')
-                .update({ messages: [freshMessage], updated_at: new Date().toISOString() })
-                .eq('id', chatId);
+        // Clear in database (неблокирующе)
+        if (chatId && ENABLE_SUPABASE_CHAT_SAVE) {
+            try {
+                const { error } = await supabase
+                    .from('chats')
+                    .update({ messages: [freshMessage], updated_at: new Date().toISOString() })
+                    .eq('id', chatId);
+                
+                if (error) {
+                    console.warn("[Chat] Failed to clear chat in Supabase:", error);
+                }
+            } catch (err) {
+                console.error("[Chat] Error clearing chat:", err);
+            }
         }
 
         // Also clear any legacy localStorage data
-        localStorage.removeItem('vibes_chat_history');
+        try {
+            localStorage.removeItem('vibes_chat_history');
+        } catch (e) {
+            console.warn("[Chat] Failed to clear localStorage:", e);
+        }
+    }
+  };
+
+  const handleCheckConnection = async () => {
+    setIsCheckingConnection(true);
+    setShowDiagnostics(true);
+    
+    try {
+      let debugUrl: string;
+      try {
+        const url = new URL("/api/debug", window.location.href);
+        debugUrl = url.toString();
+      } catch (e) {
+        debugUrl = "/api/debug";
+      }
+
+      console.log("[Diagnostics] Checking connection:", debugUrl);
+      const response = await fetch(debugUrl, {
+        method: "GET",
+        signal: AbortSignal.timeout(10000) // 10 секунд timeout
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setDiagnosticInfo(data);
+        console.log("[Diagnostics] Connection check result:", data);
+      } else {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        setDiagnosticInfo({
+          status: 'error',
+          error: `HTTP ${response.status}: ${errorText}`
+        });
+      }
+    } catch (error: any) {
+      console.error("[Diagnostics] Connection check failed:", error);
+      setDiagnosticInfo({
+        status: 'error',
+        error: error.message || 'Не удалось проверить подключение'
+      });
+    } finally {
+      setIsCheckingConnection(false);
     }
   };
 
@@ -481,14 +754,185 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
             </div>
         </div>
         
-        <button 
-            onClick={handleClearChat}
-            className="p-2.5 rounded-xl text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
-            title="Очистить историю"
-        >
-            <Trash2 size={20} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+              onClick={handleCheckConnection}
+              disabled={isCheckingConnection}
+              className="p-2.5 rounded-xl text-zinc-400 hover:text-violet-500 hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-colors disabled:opacity-50"
+              title="Проверить подключение"
+          >
+              <Settings size={20} className={isCheckingConnection ? "animate-spin" : ""} />
+          </button>
+          <button 
+              onClick={handleClearChat}
+              className="p-2.5 rounded-xl text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+              title="Очистить историю"
+          >
+              <Trash2 size={20} />
+          </button>
+        </div>
       </header>
+
+      {/* --- Diagnostics Modal --- */}
+      {showDiagnostics && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowDiagnostics(false)}>
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-zinc-200 dark:border-white/10" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-white/10 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-zinc-900 dark:text-white">Диагностика подключения</h2>
+              <button 
+                onClick={() => setShowDiagnostics(false)}
+                className="p-2 rounded-lg text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              {isCheckingConnection ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="flex flex-col items-center gap-3">
+                    <Settings size={32} className="text-violet-500 animate-spin" />
+                    <p className="text-zinc-600 dark:text-zinc-400">Проверка подключения...</p>
+                  </div>
+                </div>
+              ) : diagnosticInfo ? (
+                <>
+                  {/* Overall Status */}
+                  <div className={`p-4 rounded-xl border-2 ${
+                    diagnosticInfo.status === 'ok' 
+                      ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30'
+                      : diagnosticInfo.status === 'warning'
+                      ? 'bg-yellow-50 dark:bg-yellow-500/10 border-yellow-200 dark:border-yellow-500/30'
+                      : 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30'
+                  }`}>
+                    <div className="flex items-center gap-3">
+                      {diagnosticInfo.status === 'ok' ? (
+                        <CheckCircle2 size={24} className="text-emerald-600 dark:text-emerald-400" />
+                      ) : diagnosticInfo.status === 'warning' ? (
+                        <AlertCircle size={24} className="text-yellow-600 dark:text-yellow-400" />
+                      ) : (
+                        <XCircle size={24} className="text-red-600 dark:text-red-400" />
+                      )}
+                      <div>
+                        <h3 className="font-bold text-zinc-900 dark:text-white">
+                          Статус: {diagnosticInfo.status === 'ok' ? 'Всё в порядке' : diagnosticInfo.status === 'warning' ? 'Есть предупреждения' : 'Обнаружены ошибки'}
+                        </h3>
+                        {diagnosticInfo.health?.issues && diagnosticInfo.health.issues.length > 0 && (
+                          <ul className="mt-2 space-y-1">
+                            {diagnosticInfo.health.issues.map((issue: string, idx: number) => (
+                              <li key={idx} className="text-sm text-zinc-600 dark:text-zinc-400">• {issue}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Environment Variables */}
+                  <div>
+                    <h3 className="font-bold text-zinc-900 dark:text-white mb-3">Переменные окружения</h3>
+                    <div className="space-y-2">
+                      {diagnosticInfo.env && Object.entries(diagnosticInfo.env).map(([key, value]: [string, any]) => (
+                        <div key={key} className="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg">
+                          <span className="text-sm font-mono text-zinc-700 dark:text-zinc-300">{key}</span>
+                          <div className="flex items-center gap-2">
+                            {typeof value === 'object' && value.exists !== undefined ? (
+                              <>
+                                {value.exists ? (
+                                  <CheckCircle2 size={16} className="text-emerald-500" />
+                                ) : (
+                                  <XCircle size={16} className="text-red-500" />
+                                )}
+                                <span className="text-xs text-zinc-500">
+                                  {value.length > 0 ? `Длина: ${value.length}` : 'Не настроено'}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-xs text-zinc-500">{String(value)}</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* OpenRouter Connection */}
+                  {diagnosticInfo.openRouter && (
+                    <div>
+                      <h3 className="font-bold text-zinc-900 dark:text-white mb-3">Подключение к OpenRouter</h3>
+                      <div className={`p-4 rounded-xl border ${
+                        diagnosticInfo.openRouter.available
+                          ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30'
+                          : 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30'
+                      }`}>
+                        <div className="flex items-center gap-3 mb-2">
+                          {diagnosticInfo.openRouter.available ? (
+                            <CheckCircle2 size={20} className="text-emerald-600 dark:text-emerald-400" />
+                          ) : (
+                            <XCircle size={20} className="text-red-600 dark:text-red-400" />
+                          )}
+                          <span className="font-medium text-zinc-900 dark:text-white">
+                            {diagnosticInfo.openRouter.available ? 'Подключение успешно' : 'Подключение не удалось'}
+                          </span>
+                        </div>
+                        {diagnosticInfo.openRouter.message && (
+                          <p className="text-sm text-zinc-600 dark:text-zinc-400 ml-8">
+                            {diagnosticInfo.openRouter.message}
+                          </p>
+                        )}
+                        {diagnosticInfo.openRouter.status && (
+                          <p className="text-xs text-zinc-500 mt-2 ml-8">
+                            HTTP статус: {diagnosticInfo.openRouter.status}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* System Info */}
+                  {diagnosticInfo.system && (
+                    <div>
+                      <h3 className="font-bold text-zinc-900 dark:text-white mb-3">Системная информация</h3>
+                      <div className="space-y-2">
+                        {Object.entries(diagnosticInfo.system).map(([key, value]: [string, any]) => (
+                          <div key={key} className="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg">
+                            <span className="text-sm text-zinc-700 dark:text-zinc-300 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+                            <span className="text-xs font-mono text-zinc-500">{String(value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Error Info */}
+                  {diagnosticInfo.error && (
+                    <div className="p-4 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 rounded-xl">
+                      <p className="text-sm text-red-700 dark:text-red-400 font-medium">Ошибка:</p>
+                      <p className="text-sm text-red-600 dark:text-red-500 mt-1">{diagnosticInfo.error}</p>
+                    </div>
+                  )}
+
+                  {/* Instructions */}
+                  <div className="p-4 bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/30 rounded-xl">
+                    <h4 className="font-bold text-violet-900 dark:text-violet-300 mb-2">💡 Инструкция по настройке</h4>
+                    <ol className="text-sm text-violet-800 dark:text-violet-400 space-y-1 list-decimal list-inside">
+                      <li>Откройте Vercel Dashboard → Settings → Environment Variables</li>
+                      <li>Добавьте переменную <code className="bg-violet-100 dark:bg-violet-500/20 px-1 rounded">OPENROUTER_API_KEY</code> со значением вашего API ключа</li>
+                      <li>Убедитесь, что переменная добавлена для всех окружений (Production, Preview, Development)</li>
+                      <li>Выполните передеплой проекта после добавления переменной</li>
+                      <li>Проверьте, что API ключ OpenRouter действителен и не истек</li>
+                    </ol>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-8 text-zinc-500">
+                  Нажмите кнопку проверки для диагностики
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* --- Chat Area --- */}
       <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-48 pt-6 scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-800">
