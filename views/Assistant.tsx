@@ -315,13 +315,22 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
         headers["Authorization"] = `Bearer ${accessToken}`;
       }
 
+      const requestBody = {
+        "model": "xiaomi/mimo-v2-flash:free",
+        "messages": apiMessages
+      };
+
+      console.log("Sending request to /api/chat", {
+        headersCount: Object.keys(headers).length,
+        hasAuth: !!headers["Authorization"],
+        messagesCount: apiMessages.length,
+        bodySize: JSON.stringify(requestBody).length
+      });
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers,
-        body: JSON.stringify({
-          "model": "xiaomi/mimo-v2-flash:free",
-          "messages": apiMessages
-        }),
+        body: JSON.stringify(requestBody),
         signal: controller.signal
       });
 
@@ -346,7 +355,11 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
 
     } catch (error: any) {
       clearTimeout(timeoutId);
-      console.error("OpenRouter Error:", error);
+      console.error("OpenRouter Error:", {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
 
       let errorText = 'Произошла ошибка соединения с нейросетью. Проверь интернет или API ключ.';
       if (error.name === 'AbortError') {
