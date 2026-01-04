@@ -320,8 +320,9 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
         "messages": apiMessages
       };
 
-      // Use absolute URL to avoid Safari issues
-      const apiUrl = window.location.origin + "/api/chat";
+      // Use environment variable or fallback to current origin
+      // В dev режиме используйте deployed Vercel URL через VITE_API_CHAT_URL
+      const apiUrl = import.meta.env.VITE_API_CHAT_URL || window.location.origin + "/api/chat";
 
       console.log("Sending request to", apiUrl, {
         headersCount: Object.keys(headers).length,
