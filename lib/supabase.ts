@@ -21,6 +21,22 @@ if (!isSupabaseConfigured) {
   console.info('Check your Environment Variables: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY');
 }
 
+// Keys that are critical for auth - never delete these
+const PROTECTED_KEYS = ['sb-', 'supabase.auth'];
+
+const cleanupStorage = () => {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && !PROTECTED_KEYS.some(pk => k.includes(pk))) {
+            // Remove non-critical keys (chat history, theme, etc.)
+            keysToRemove.push(k);
+        }
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+    console.log(`Cleared ${keysToRemove.length} items from localStorage to free space`);
+};
+
 const customStorage = {
     getItem: (key: string): Promise<string | null> => {
         try {
@@ -34,22 +50,15 @@ const customStorage = {
         try {
             localStorage.setItem(key, value);
         } catch (e: any) {
-            // If it's a quota error, we try to clear old chat history to make room
+            // If it's a quota error, aggressively clear non-auth data
             if (e.name === 'QuotaExceededError' || e.message?.includes('quota')) {
-                const keysToRemove: string[] = [];
-                for (let i = 0; i < localStorage.length; i++) {
-                    const k = localStorage.key(i);
-                    if (k && (k.includes('chat_history') || k.includes('vibes_chat'))) {
-                        keysToRemove.push(k);
-                    }
-                }
-                keysToRemove.forEach(k => localStorage.removeItem(k));
+                cleanupStorage();
 
                 // Try again after cleanup
                 try {
                     localStorage.setItem(key, value);
                 } catch {
-                    console.error("Storage still full after cleanup");
+                    console.error("Storage still full after cleanup - auth may fail");
                 }
             }
         }
@@ -65,6 +74,9 @@ const customStorage = {
 
 // Экспортируем флаг для проверки в приложении
 export const isSupabaseReady = isSupabaseConfigured;
+
+// Export cleanup function for manual use
+export { cleanupStorage };
 
 export const supabase = createClient(
     supabaseUrl || 'https://example.supabase.co',

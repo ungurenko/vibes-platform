@@ -18,7 +18,7 @@ import { ChatMessage } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSound } from '../SoundContext';
 import { DEFAULT_AI_SYSTEM_INSTRUCTION } from '../data';
-import { supabase } from '../lib/supabase';
+import { supabase, cleanupStorage } from '../lib/supabase';
 
 // --- Configuration ---
 
@@ -334,6 +334,10 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled 
       let errorText = 'Произошла ошибка соединения с нейросетью. Проверь интернет или API ключ.';
       if (error.name === 'AbortError') {
         errorText = 'Запрос занял слишком много времени. Попробуй ещё раз или упрости вопрос.';
+      } else if (error.message?.includes('Сессия истекла') || error.message?.includes('AUTH_REQUIRED')) {
+        // Clear storage and suggest re-login
+        cleanupStorage();
+        errorText = 'Сессия истекла. Пожалуйста, перезагрузите страницу и войдите заново.';
       } else if (error.message) {
         errorText = error.message;
       }
