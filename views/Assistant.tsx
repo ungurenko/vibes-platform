@@ -332,8 +332,12 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
         }
       }
 
+      // Log full URL to be absolutely sure where we are sending
+      const fullUrl = apiUrl.startsWith('http') ? apiUrl : new URL(apiUrl, window.location.origin).toString();
+
       console.log("🔍 AI Assistant Debug:", {
         apiUrl,
+        fullUrl,
         envVarSet: !!envApiUrl,
         envValue: envApiUrl,
         origin: window.location.origin,
