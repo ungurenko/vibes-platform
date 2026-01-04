@@ -99,12 +99,14 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'OpenRouter API Key is missing on server' });
   }
 
-  try {
+try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "HTTP-Referer": process.env.VITE_SITE_URL || "https://vibes-platform.vercel.app", // Твой домен
+        "X-Title": "Vibes Platform", // Название твоего проекта
       },
       body: JSON.stringify({
         model: model || "xiaomi/mimo-v2-flash:free",
