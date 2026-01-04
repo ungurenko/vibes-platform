@@ -294,10 +294,24 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 секунд timeout
 
-    // Use explicit URL construction to ensure Safari compatibility
-    // Fallback to relative path if origin is unavailable
-    const origin = window.location.origin || '';
-    const apiUrl = origin ? `${origin}/api/chat` : "/api/chat";
+    // Use URL constructor to ensure Safari compatibility
+    // This guarantees a valid absolute URL
+    let apiUrl: string;
+    try {
+      const url = new URL("/api/chat", window.location.href);
+      apiUrl = url.toString();
+      console.log("[URL] Constructed URL:", {
+        input: "/api/chat",
+        base: window.location.href,
+        result: apiUrl,
+        origin: window.location.origin,
+        protocol: window.location.protocol,
+        hostname: window.location.hostname
+      });
+    } catch (e) {
+      console.error("[URL] Failed to construct URL:", e);
+      apiUrl = "/api/chat"; // Fallback to relative path
+    }
 
     try {
       const accessToken = session.access_token;
@@ -330,13 +344,12 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
           console.warn("⚠️ API функции работают только на Vercel. Для локальной разработки используйте 'vercel dev'.");
       }
 
-      // Log full URL to be absolutely sure where we are sending
-      const fullUrl = new URL(apiUrl, window.location.origin).toString();
-
       console.log("🔍 AI Assistant Debug:", {
         apiUrl,
-        fullUrl,
+        apiUrlType: typeof apiUrl,
+        apiUrlLength: apiUrl.length,
         origin: window.location.origin,
+        locationHref: window.location.href,
         headersCount: Object.keys(headers).length,
         hasAuth: !!headers["Authorization"],
         messagesCount: apiMessages.length,
