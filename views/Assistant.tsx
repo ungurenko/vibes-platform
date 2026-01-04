@@ -597,6 +597,7 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
       throw lastError || new Error('Failed to get response after all retries');
     }
 
+    try {
       console.log("[API] Response status:", response.status, response.statusText);
 
       if (!response.ok) {
