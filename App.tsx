@@ -478,7 +478,10 @@ const AppContent: React.FC = () => {
               <div className="text-center p-8 max-w-md">
                   <div className="text-red-500 text-5xl mb-4">⚠️</div>
                   <h2 className="text-white text-xl font-bold mb-2">Ошибка подключения</h2>
-                  <p className="text-zinc-400 mb-6">{authError}</p>
+                  <p className="text-zinc-400 mb-4">{authError}</p>
+                  <p className="text-zinc-500 text-sm mb-6">
+                      Возможные причины: проблемы с сетью, недоступность Supabase, или неверные переменные окружения на Vercel.
+                  </p>
                   <button
                       onClick={() => window.location.reload()}
                       className="px-6 py-3 bg-violet-600 text-white rounded-xl hover:bg-violet-500 font-bold"

@@ -19,6 +19,14 @@ const isSupabaseConfigured = supabaseUrl && supabaseAnonKey && isValidUrl(supaba
 if (!isSupabaseConfigured) {
   console.error('❌ Supabase configuration is invalid or missing!');
   console.info('Check your Environment Variables: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY');
+  console.log('[Supabase] Config check:', {
+    hasUrl: !!supabaseUrl,
+    urlLength: supabaseUrl?.length || 0,
+    hasKey: !!supabaseAnonKey,
+    keyLength: supabaseAnonKey?.length || 0,
+    isValidUrl: supabaseUrl ? isValidUrl(supabaseUrl) : false,
+    urlPreview: supabaseUrl ? `${supabaseUrl.substring(0, 30)}...` : 'empty'
+  });
 }
 
 // Keys that are critical for auth - never delete these
