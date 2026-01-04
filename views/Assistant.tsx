@@ -210,9 +210,47 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
     if (messages.length === 0) return;
     
     try {
-      localStorage.setItem('vibes_chat_history', JSON.stringify(messages));
-    } catch (e) {
-      console.warn("[Chat] Failed to save to localStorage:", e);
+      const dataToSave = JSON.stringify(messages);
+      const dataSize = dataToSave.length;
+      
+      // Предупреждение если данные слишком большие (>1MB)
+      if (dataSize > 1024 * 1024) {
+        console.warn(`[Chat] Chat history is large: ${(dataSize / 1024).toFixed(2)}KB. Consider clearing old messages.`);
+        
+        // Ограничиваем количество сообщений, чтобы не переполнять localStorage
+        const maxMessages = 50;
+        if (messages.length > maxMessages) {
+          console.warn(`[Chat] Limiting chat history to last ${maxMessages} messages to prevent localStorage overflow`);
+          const limitedMessages = messages.slice(-maxMessages);
+          const limitedData = JSON.stringify(limitedMessages);
+          localStorage.setItem('vibes_chat_history', limitedData);
+          return;
+        }
+      }
+      
+      localStorage.setItem('vibes_chat_history', dataToSave);
+    } catch (e: any) {
+      console.error("[Chat] Failed to save to localStorage:", e);
+      
+      // Если это QuotaExceededError, пытаемся очистить старые сообщения
+      if (e.name === 'QuotaExceededError' || e.code === 22) {
+        console.warn("[Chat] localStorage quota exceeded, clearing old messages");
+        try {
+          // Оставляем только последние 20 сообщений
+          const limitedMessages = messages.slice(-20);
+          localStorage.setItem('vibes_chat_history', JSON.stringify(limitedMessages));
+          console.log("[Chat] Cleared old messages, saved last 20 messages");
+        } catch (clearError) {
+          console.error("[Chat] Failed to save even after clearing:", clearError);
+          // Если даже это не помогло, просто очищаем localStorage для чата
+          try {
+            localStorage.removeItem('vibes_chat_history');
+            console.warn("[Chat] Cleared chat history due to storage issues");
+          } catch (removeError) {
+            console.error("[Chat] Failed to clear chat history:", removeError);
+          }
+        }
+      }
     }
   }, [messages]);
 
@@ -271,6 +309,20 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
 
     const accessToken = session.access_token;
 
+    // Диагностика: проверяем тип и размер токена
+    const tokenType = typeof accessToken;
+    const tokenLength = accessToken ? (typeof accessToken === 'string' ? accessToken.length : JSON.stringify(accessToken).length) : 0;
+    
+    // Предупреждение если токен слишком большой (больше 10KB - это ошибка)
+    if (tokenLength > 10000) {
+      console.error("[API] CRITICAL: Token is abnormally large!", {
+        tokenType,
+        tokenLength,
+        isString: typeof accessToken === 'string',
+        tokenPreview: typeof accessToken === 'string' ? accessToken.substring(0, 100) : 'not a string'
+      });
+    }
+
     const apiMessages = [
       { role: 'system', content: systemInstruction },
       ...messages.slice(-20).map(m => ({
@@ -284,9 +336,24 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
       "Content-Type": "application/json"
     };
 
-    // Добавляем токен авторизации если есть
-    if (accessToken) {
+    // Добавляем токен авторизации если есть и это строка
+    if (accessToken && typeof accessToken === 'string') {
+      // Проверяем, что токен не слишком большой (нормальный JWT ~200-500 символов)
+      if (accessToken.length > 10000) {
+        console.error("[API] Token is too large, refusing to send. This is likely a bug.");
+        const errorMsg: ChatMessage = {
+          id: Date.now().toString(),
+          role: 'assistant',
+          text: 'Ошибка аутентификации: обнаружен некорректный токен. Пожалуйста, перезагрузите страницу и войдите заново.',
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, errorMsg]);
+        setIsTyping(false);
+        return;
+      }
       headers["Authorization"] = `Bearer ${accessToken}`;
+    } else if (accessToken) {
+      console.error("[API] accessToken is not a string!", { tokenType, accessToken });
     }
 
     const requestBody = {
@@ -294,15 +361,9 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
       "messages": apiMessages
     };
 
-    // Формируем URL для API
-    let apiUrl = "/api/chat";
-    try {
-      const url = new URL("/api/chat", window.location.href);
-      apiUrl = url.toString();
-    } catch (e) {
-      // Используем относительный путь если не удалось создать абсолютный URL
-      apiUrl = "/api/chat";
-    }
+    // Формируем URL для API - используем относительный путь по умолчанию для совместимости
+    // Абсолютный URL может вызывать проблемы в некоторых браузерах (особенно Safari)
+    const apiUrl = "/api/chat";
 
     // Предупреждение для разработчика при локальной разработке
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
@@ -315,7 +376,8 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
       hostname: window.location.hostname,
       origin: window.location.origin,
       hasAuth: !!accessToken,
-      authTokenLength: accessToken?.length || 0,
+      authTokenType: typeof accessToken,
+      authTokenLength: tokenLength,
       messagesCount: apiMessages.length,
       model: requestBody.model,
       bodySize: JSON.stringify(requestBody).length
