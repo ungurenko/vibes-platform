@@ -320,18 +320,23 @@ const Assistant: React.FC<AssistantProps> = ({ initialMessage, onMessageHandled,
         "messages": apiMessages
       };
 
-      console.log("Sending request to /api/chat", {
+      // Use absolute URL to avoid Safari issues
+      const apiUrl = window.location.origin + "/api/chat";
+
+      console.log("Sending request to", apiUrl, {
         headersCount: Object.keys(headers).length,
         hasAuth: !!headers["Authorization"],
         messagesCount: apiMessages.length,
         bodySize: JSON.stringify(requestBody).length
       });
 
-      const response = await fetch("/api/chat", {
+      const response = await fetch(apiUrl, {
         method: "POST",
         headers,
         body: JSON.stringify(requestBody),
-        signal: controller.signal
+        signal: controller.signal,
+        mode: 'cors',
+        credentials: 'same-origin'
       });
 
       clearTimeout(timeoutId);
